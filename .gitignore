@@ -1,0 +1,33 @@
+﻿# --- Python genel ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.build/
+dist/
+.ipynb_checkpoints/
+.mypy_cache/
+.pytest_cache/
+*.log
+
+# IDE / ortam
+.vscode/
+.idea/
+.env
+.env.*
+.venv/
+venv/
+
+# --- Proje verileri: tüm içerik ignore ---
+cache/**
+data/**
+
+# Klasörlerin repo’da boş görünmesi için placeholder’a izin ver
+!cache/.gitkeep
+!data/.gitkeep
+
+# Büyük dosya türlerini de garantiye al
+*.pbf
+*.parquet

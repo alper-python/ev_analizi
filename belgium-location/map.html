@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_0ed7d96567f554232ef3fb8bd9074a00 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    <div style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#fff;padding:8px 10px;border:1px solid #999;border-radius:6px;font-size:13px;"><div style="font-weight:600;margin-bottom:4px;">Legenda</div><div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:12px;height:12px;background:blue;margin-right:6px;border:1px solid #333;"></span>Okul</div><div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:12px;height:12px;background:orange;margin-right:6px;border:1px solid #333;"></span>Market</div><div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:12px;height:12px;background:red;margin-right:6px;border:1px solid #333;"></span>Sağlık</div><div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:12px;height:12px;background:purple;margin-right:6px;border:1px solid #333;"></span>Ulaşım</div><div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:12px;height:12px;background:green;margin-right:6px;border:1px solid #333;"></span>Park</div><div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:12px;height:12px;background:cadetblue;margin-right:6px;border:1px solid #333;"></span>Spor</div></div>
+    <div style="position:fixed;top:10px;right:10px;z-index:9999;background:#fff;padding:10px 12px;border:1px solid #999;border-radius:6px;font-size:13px;min-width:200px;"><div style="font-weight:700;margin-bottom:6px;">Puanlama</div><div style="display:flex;justify-content:space-between;"><span>Okul</span><span>9.3/10</span></div><div style="display:flex;justify-content:space-between;"><span>Market</span><span>6.7/10</span></div><div style="display:flex;justify-content:space-between;"><span>Sağlık</span><span>9.7/10</span></div><div style="display:flex;justify-content:space-between;"><span>Ulaşım</span><span>8.7/10</span></div><div style="display:flex;justify-content:space-between;"><span>Park</span><span>9.6/10</span></div><div style="display:flex;justify-content:space-between;"><span>Spor</span><span>9.2/10</span></div><hr style="margin:6px 0;border:none;border-top:1px solid #ddd;" /><div style="display:flex;justify-content:space-between;font-weight:700;"><span>Genel</span><span>8.7/10</span></div></div>
+    
+            <div class="folium-map" id="map_0ed7d96567f554232ef3fb8bd9074a00" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_0ed7d96567f554232ef3fb8bd9074a00 = L.map(
+                "map_0ed7d96567f554232ef3fb8bd9074a00",
+                {
+                    center: [50.9945115, 4.8497807],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 15,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+            L.control.scale().addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+
+            
+
+        
+    
+            var tile_layer_55176f3c01e3c9b8ef4fa464bb1f9ff5 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_55176f3c01e3c9b8ef4fa464bb1f9ff5.addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var marker_5c1fb83be452d5f17596967875f0b39a = L.marker(
+                [50.9945115, 4.8497807],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_f210aa9610d03ebc9fb072190e1694de = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "black",
+  "iconColor": "white",
+  "icon": "home",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_d2f818ba2e1ee92f8d9ea6518032cf9a = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_510df3a2ba833c91fe397bba0930a058 = $(`<div id="html_510df3a2ba833c91fe397bba0930a058" style="width: 100.0%; height: 100.0%;">Adres: 18, Vanden Panhuysenstraat, Aarschot, Leuven, Vlaams-Brabant, Vlaanderen, 3200, België / Belgique / Belgien</div>`)[0];
+                popup_d2f818ba2e1ee92f8d9ea6518032cf9a.setContent(html_510df3a2ba833c91fe397bba0930a058);
+            
+        
+
+        marker_5c1fb83be452d5f17596967875f0b39a.bindPopup(popup_d2f818ba2e1ee92f8d9ea6518032cf9a)
+        ;
+
+        
+    
+    
+            marker_5c1fb83be452d5f17596967875f0b39a.bindTooltip(
+                `<div>
+                     Adres
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_5c1fb83be452d5f17596967875f0b39a.setIcon(icon_f210aa9610d03ebc9fb072190e1694de);
+            
+    
+            var marker_aa87b98ab1e5d84af6ff6e700b1a2127 = L.marker(
+                [50.996829370039755, 4.848622936318692],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_f6bc98e2a5db334c66d8ed15625864d6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_3ed72e1cb662714324c8176a578ba9aa = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_c6bce470e44ff6bf3928d7ced04d3d64 = $(`<div id="html_c6bce470e44ff6bf3928d7ced04d3d64" style="width: 100.0%; height: 100.0%;">Okul: VBS De Springplank<br>Yürüme: 338 m, 4 dk<br>Araba: 378 m, 1 dk</div>`)[0];
+                popup_3ed72e1cb662714324c8176a578ba9aa.setContent(html_c6bce470e44ff6bf3928d7ced04d3d64);
+            
+        
+
+        marker_aa87b98ab1e5d84af6ff6e700b1a2127.bindPopup(popup_3ed72e1cb662714324c8176a578ba9aa)
+        ;
+
+        
+    
+    
+            marker_aa87b98ab1e5d84af6ff6e700b1a2127.bindTooltip(
+                `<div>
+                     Okul: VBS De Springplank
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_aa87b98ab1e5d84af6ff6e700b1a2127.setIcon(icon_f6bc98e2a5db334c66d8ed15625864d6);
+            
+    
+            var marker_9ce4bdbf2620b4a156b8e85b8d5fface = L.marker(
+                [50.98749470943977, 4.847094254938965],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_1f43c96bd5a7c954dbed773aeccf32da = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_e888b77f65d3fc3cfa5ba407303b08d1 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_f700956231400277d742b3300b567572 = $(`<div id="html_f700956231400277d742b3300b567572" style="width: 100.0%; height: 100.0%;">Okul: CVO Hageland<br>Yürüme: 1.00 km, 13 dk<br>Araba: 1.12 km, 2 dk</div>`)[0];
+                popup_e888b77f65d3fc3cfa5ba407303b08d1.setContent(html_f700956231400277d742b3300b567572);
+            
+        
+
+        marker_9ce4bdbf2620b4a156b8e85b8d5fface.bindPopup(popup_e888b77f65d3fc3cfa5ba407303b08d1)
+        ;
+
+        
+    
+    
+            marker_9ce4bdbf2620b4a156b8e85b8d5fface.bindTooltip(
+                `<div>
+                     Okul: CVO Hageland
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_9ce4bdbf2620b4a156b8e85b8d5fface.setIcon(icon_1f43c96bd5a7c954dbed773aeccf32da);
+            
+    
+            var marker_630810a32a8ef8330d9f4534da59740c = L.marker(
+                [50.98959216237738, 4.840098688626126],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_da2c17a603c734872f7969f85658209f = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_40e1aaa53c8c087d1932a7c9f76155b2 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_7bec7aca49efd9b34f56e7d2a6f00d23 = $(`<div id="html_7bec7aca49efd9b34f56e7d2a6f00d23" style="width: 100.0%; height: 100.0%;">Okul: Sint-Jozefscollege Aarschot<br>Yürüme: 1.09 km, 14 dk<br>Araba: 1.22 km, 2 dk</div>`)[0];
+                popup_40e1aaa53c8c087d1932a7c9f76155b2.setContent(html_7bec7aca49efd9b34f56e7d2a6f00d23);
+            
+        
+
+        marker_630810a32a8ef8330d9f4534da59740c.bindPopup(popup_40e1aaa53c8c087d1932a7c9f76155b2)
+        ;
+
+        
+    
+    
+            marker_630810a32a8ef8330d9f4534da59740c.bindTooltip(
+                `<div>
+                     Okul: Sint-Jozefscollege Aarschot
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_630810a32a8ef8330d9f4534da59740c.setIcon(icon_da2c17a603c734872f7969f85658209f);
+            
+    
+            var marker_73893f16b4764afbb583dc23f0e59dec = L.marker(
+                [50.99209766825588, 4.837511282909533],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_d28931163fd8a6a25104bb74b62579b3 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_b541f1020b175ee09ec8d8a2c46968fe = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_22e7d40b1d8bfc98675df0042535da24 = $(`<div id="html_22e7d40b1d8bfc98675df0042535da24" style="width: 100.0%; height: 100.0%;">Okul: Damiaaninstituut<br>Yürüme: 1.12 km, 14 dk<br>Araba: 1.26 km, 2 dk</div>`)[0];
+                popup_b541f1020b175ee09ec8d8a2c46968fe.setContent(html_22e7d40b1d8bfc98675df0042535da24);
+            
+        
+
+        marker_73893f16b4764afbb583dc23f0e59dec.bindPopup(popup_b541f1020b175ee09ec8d8a2c46968fe)
+        ;
+
+        
+    
+    
+            marker_73893f16b4764afbb583dc23f0e59dec.bindTooltip(
+                `<div>
+                     Okul: Damiaaninstituut
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_73893f16b4764afbb583dc23f0e59dec.setIcon(icon_d28931163fd8a6a25104bb74b62579b3);
+            
+    
+            var marker_13b345ec89adfa4472e556a691b867ee = L.marker(
+                [50.985804504816045, 4.84527171641647],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_71cba4487104b01d745cd142e854218a = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a9225cbfb211ba28d4151cf5c314910f = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_29d1746531e7ee28f0c55e81d204c241 = $(`<div id="html_29d1746531e7ee28f0c55e81d204c241" style="width: 100.0%; height: 100.0%;">Okul: Vrije Basisschool Sint-Jozefscollege Aarschot - Bekaf<br>Yürüme: 1.27 km, 16 dk<br>Araba: 1.43 km, 2 dk</div>`)[0];
+                popup_a9225cbfb211ba28d4151cf5c314910f.setContent(html_29d1746531e7ee28f0c55e81d204c241);
+            
+        
+
+        marker_13b345ec89adfa4472e556a691b867ee.bindPopup(popup_a9225cbfb211ba28d4151cf5c314910f)
+        ;
+
+        
+    
+    
+            marker_13b345ec89adfa4472e556a691b867ee.bindTooltip(
+                `<div>
+                     Okul: Vrije Basisschool Sint-Jozefscollege Aarschot - Bekaf
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_13b345ec89adfa4472e556a691b867ee.setIcon(icon_71cba4487104b01d745cd142e854218a);
+            
+    
+            var marker_280fa52361955aba711b5910430fcfbd = L.marker(
+                [50.98858266413573, 4.842091593347354],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_46b8ad00781ce68a85144863f7665aaf = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_f017011035ded218ccf3f118a05ae30a = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e4a878d330a5b1cdc0c9d0628257344b = $(`<div id="html_e4a878d330a5b1cdc0c9d0628257344b" style="width: 100.0%; height: 100.0%;">Market: ALDI<br>Yürüme: 1.06 km, 13 dk<br>Araba: 1.19 km, 2 dk</div>`)[0];
+                popup_f017011035ded218ccf3f118a05ae30a.setContent(html_e4a878d330a5b1cdc0c9d0628257344b);
+            
+        
+
+        marker_280fa52361955aba711b5910430fcfbd.bindPopup(popup_f017011035ded218ccf3f118a05ae30a)
+        ;
+
+        
+    
+    
+            marker_280fa52361955aba711b5910430fcfbd.bindTooltip(
+                `<div>
+                     Market: ALDI
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_280fa52361955aba711b5910430fcfbd.setIcon(icon_46b8ad00781ce68a85144863f7665aaf);
+            
+    
+            var marker_8bdd40b7fe6d0fd0c240d0e32db9e9d6 = L.marker(
+                [50.98748156262963, 4.840756997454506],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_f16f604ee4c086e09742af13e92d099e = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_af1a8381d4ff21b89b1059cbeba41442 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_1cfafeb4c08c016ba51faa0d25ef3e66 = $(`<div id="html_1cfafeb4c08c016ba51faa0d25ef3e66" style="width: 100.0%; height: 100.0%;">Market: Colruyt<br>Yürüme: 1.26 km, 16 dk<br>Araba: 1.41 km, 2 dk</div>`)[0];
+                popup_af1a8381d4ff21b89b1059cbeba41442.setContent(html_1cfafeb4c08c016ba51faa0d25ef3e66);
+            
+        
+
+        marker_8bdd40b7fe6d0fd0c240d0e32db9e9d6.bindPopup(popup_af1a8381d4ff21b89b1059cbeba41442)
+        ;
+
+        
+    
+    
+            marker_8bdd40b7fe6d0fd0c240d0e32db9e9d6.bindTooltip(
+                `<div>
+                     Market: Colruyt
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_8bdd40b7fe6d0fd0c240d0e32db9e9d6.setIcon(icon_f16f604ee4c086e09742af13e92d099e);
+            
+    
+            var marker_a9732a4b561e42ade0dba1e2bb684323 = L.marker(
+                [51.00018462761839, 4.833814238974864],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_5c7fced4bfdf3f09689ab279c2aec7fa = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_15b0c1217c0904b2f607f54369172057 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_e232e044091e6869bafda5103af701e4 = $(`<div id="html_e232e044091e6869bafda5103af701e4" style="width: 100.0%; height: 100.0%;">Market: Albert Heijn<br>Yürüme: 1.60 km, 20 dk<br>Araba: 1.80 km, 3 dk</div>`)[0];
+                popup_15b0c1217c0904b2f607f54369172057.setContent(html_e232e044091e6869bafda5103af701e4);
+            
+        
+
+        marker_a9732a4b561e42ade0dba1e2bb684323.bindPopup(popup_15b0c1217c0904b2f607f54369172057)
+        ;
+
+        
+    
+    
+            marker_a9732a4b561e42ade0dba1e2bb684323.bindTooltip(
+                `<div>
+                     Market: Albert Heijn
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a9732a4b561e42ade0dba1e2bb684323.setIcon(icon_5c7fced4bfdf3f09689ab279c2aec7fa);
+            
+    
+            var marker_b057f7f6c8cf4f666a09cf03adb4ed58 = L.marker(
+                [50.99998095188786, 4.831854385436645],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_c522a44b0eb684a6aea3c99f5fbc9c14 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c1732d3760d17e94f7eec6d616991c95 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_aca340dbf786e083665374c767f55ffc = $(`<div id="html_aca340dbf786e083665374c767f55ffc" style="width: 100.0%; height: 100.0%;">Market: Carrefour Market<br>Yürüme: 1.74 km, 22 dk<br>Araba: 1.95 km, 3 dk</div>`)[0];
+                popup_c1732d3760d17e94f7eec6d616991c95.setContent(html_aca340dbf786e083665374c767f55ffc);
+            
+        
+
+        marker_b057f7f6c8cf4f666a09cf03adb4ed58.bindPopup(popup_c1732d3760d17e94f7eec6d616991c95)
+        ;
+
+        
+    
+    
+            marker_b057f7f6c8cf4f666a09cf03adb4ed58.bindTooltip(
+                `<div>
+                     Market: Carrefour Market
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_b057f7f6c8cf4f666a09cf03adb4ed58.setIcon(icon_c522a44b0eb684a6aea3c99f5fbc9c14);
+            
+    
+            var marker_aaefdf1347998d045ad31235a279a097 = L.marker(
+                [50.98404036843116, 4.837109868732464],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_00b2d829f178bb94a378feea662f2b9f = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_588bd9e48935a6e0868fed47e3f919a5 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_d615e60833263886ecd0b17f4ce88f1f = $(`<div id="html_d615e60833263886ecd0b17f4ce88f1f" style="width: 100.0%; height: 100.0%;">Market: Delhaize<br>Yürüme: 1.83 km, 23 dk<br>Araba: 2.05 km, 4 dk</div>`)[0];
+                popup_588bd9e48935a6e0868fed47e3f919a5.setContent(html_d615e60833263886ecd0b17f4ce88f1f);
+            
+        
+
+        marker_aaefdf1347998d045ad31235a279a097.bindPopup(popup_588bd9e48935a6e0868fed47e3f919a5)
+        ;
+
+        
+    
+    
+            marker_aaefdf1347998d045ad31235a279a097.bindTooltip(
+                `<div>
+                     Market: Delhaize
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_aaefdf1347998d045ad31235a279a097.setIcon(icon_00b2d829f178bb94a378feea662f2b9f);
+            
+    
+            var marker_bc4e3176d366f7e32522313214e5bd81 = L.marker(
+                [50.992928300155526, 4.848477899870781],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_a906d575724dc9721009bf9b91ea1213 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_6bc2be18f99e91c9468aa1056403ee60 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_2e24b4083618ac61b9d67b4b37c50d6c = $(`<div id="html_2e24b4083618ac61b9d67b4b37c50d6c" style="width: 100.0%; height: 100.0%;">Sağlık: Medisch Centrum Aarschot<br>Yürüme: 248 m, 3 dk<br>Araba: 278 m, 0 dk</div>`)[0];
+                popup_6bc2be18f99e91c9468aa1056403ee60.setContent(html_2e24b4083618ac61b9d67b4b37c50d6c);
+            
+        
+
+        marker_bc4e3176d366f7e32522313214e5bd81.bindPopup(popup_6bc2be18f99e91c9468aa1056403ee60)
+        ;
+
+        
+    
+    
+            marker_bc4e3176d366f7e32522313214e5bd81.bindTooltip(
+                `<div>
+                     Sağlık: Medisch Centrum Aarschot
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_bc4e3176d366f7e32522313214e5bd81.setIcon(icon_a906d575724dc9721009bf9b91ea1213);
+            
+    
+            var marker_7238c904ded1bb3646453cb7ce1d1521 = L.marker(
+                [50.9957048, 4.8596791],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_f65f4630d04d969872931a7271876e37 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_40d5df02638df6ac5420ec82e28879ca = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_76e65ceac8647b73db9570ef1926f3db = $(`<div id="html_76e65ceac8647b73db9570ef1926f3db" style="width: 100.0%; height: 100.0%;">Sağlık: Geert Massant<br>Yürüme: 882 m, 11 dk<br>Araba: 987 m, 2 dk</div>`)[0];
+                popup_40d5df02638df6ac5420ec82e28879ca.setContent(html_76e65ceac8647b73db9570ef1926f3db);
+            
+        
+
+        marker_7238c904ded1bb3646453cb7ce1d1521.bindPopup(popup_40d5df02638df6ac5420ec82e28879ca)
+        ;
+
+        
+    
+    
+            marker_7238c904ded1bb3646453cb7ce1d1521.bindTooltip(
+                `<div>
+                     Sağlık: Geert Massant
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_7238c904ded1bb3646453cb7ce1d1521.setIcon(icon_f65f4630d04d969872931a7271876e37);
+            
+    
+            var marker_f6a3ce85200157ef42b14ec23dca12cb = L.marker(
+                [50.9953084, 4.8283916],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_ea251d029634b2658a37ac48c955cbf7 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_5662cf7f8dd2635c4799c0e869aa3225 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_aecd8f5810945c1cac3047131dc228a0 = $(`<div id="html_aecd8f5810945c1cac3047131dc228a0" style="width: 100.0%; height: 100.0%;">Sağlık: Dr. Sevenants Lieve<br>Yürüme: 1.87 km, 23 dk<br>Araba: 2.10 km, 4 dk</div>`)[0];
+                popup_5662cf7f8dd2635c4799c0e869aa3225.setContent(html_aecd8f5810945c1cac3047131dc228a0);
+            
+        
+
+        marker_f6a3ce85200157ef42b14ec23dca12cb.bindPopup(popup_5662cf7f8dd2635c4799c0e869aa3225)
+        ;
+
+        
+    
+    
+            marker_f6a3ce85200157ef42b14ec23dca12cb.bindTooltip(
+                `<div>
+                     Sağlık: Dr. Sevenants Lieve
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_f6a3ce85200157ef42b14ec23dca12cb.setIcon(icon_ea251d029634b2658a37ac48c955cbf7);
+            
+    
+            var marker_66a024b5760bedd7a8ae00257a2d86f4 = L.marker(
+                [51.0083309, 4.8387371],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_d26b52281fc0896855cd826a1ca2c201 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_ef6dfdfa14da7a01780807dfa96b8549 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_3dbec8e0f21115fb8b573ef8d374e69e = $(`<div id="html_3dbec8e0f21115fb8b573ef8d374e69e" style="width: 100.0%; height: 100.0%;">Sağlık: Dokter Patrick Verstrepen<br>Yürüme: 2.15 km, 27 dk<br>Araba: 2.41 km, 4 dk</div>`)[0];
+                popup_ef6dfdfa14da7a01780807dfa96b8549.setContent(html_3dbec8e0f21115fb8b573ef8d374e69e);
+            
+        
+
+        marker_66a024b5760bedd7a8ae00257a2d86f4.bindPopup(popup_ef6dfdfa14da7a01780807dfa96b8549)
+        ;
+
+        
+    
+    
+            marker_66a024b5760bedd7a8ae00257a2d86f4.bindTooltip(
+                `<div>
+                     Sağlık: Dokter Patrick Verstrepen
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_66a024b5760bedd7a8ae00257a2d86f4.setIcon(icon_d26b52281fc0896855cd826a1ca2c201);
+            
+    
+            var marker_3cd7c8531c500c81033a63e568f397f0 = L.marker(
+                [51.0124803, 4.8686789],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_6ff12cf8acf1d389cb49b0a66a4efe7c = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a9e13e91a8092191f29d273821ecbd0e = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_2f016196e1e748276a397bf102dffcee = $(`<div id="html_2f016196e1e748276a397bf102dffcee" style="width: 100.0%; height: 100.0%;">Sağlık: Huisartsenpraktijk Gijmel<br>Yürüme: 2.99 km, 37 dk<br>Araba: 3.35 km, 6 dk</div>`)[0];
+                popup_a9e13e91a8092191f29d273821ecbd0e.setContent(html_2f016196e1e748276a397bf102dffcee);
+            
+        
+
+        marker_3cd7c8531c500c81033a63e568f397f0.bindPopup(popup_a9e13e91a8092191f29d273821ecbd0e)
+        ;
+
+        
+    
+    
+            marker_3cd7c8531c500c81033a63e568f397f0.bindTooltip(
+                `<div>
+                     Sağlık: Huisartsenpraktijk Gijmel
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_3cd7c8531c500c81033a63e568f397f0.setIcon(icon_6ff12cf8acf1d389cb49b0a66a4efe7c);
+            
+    
+            var marker_af112f663153b4f66d9faf9f110b036a = L.marker(
+                [51.0024869, 4.8637488],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_58592db40eb0f76fd46da03a662ffd2e = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_f2439416e242382804c0e420da6cb555 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_9dbd2cff7bae091889eb9d20831d1c4c = $(`<div id="html_9dbd2cff7bae091889eb9d20831d1c4c" style="width: 100.0%; height: 100.0%;">Ulaşım: Langdorp<br>Yürüme: 1.65 km, 21 dk<br>Araba: 1.85 km, 3 dk</div>`)[0];
+                popup_f2439416e242382804c0e420da6cb555.setContent(html_9dbd2cff7bae091889eb9d20831d1c4c);
+            
+        
+
+        marker_af112f663153b4f66d9faf9f110b036a.bindPopup(popup_f2439416e242382804c0e420da6cb555)
+        ;
+
+        
+    
+    
+            marker_af112f663153b4f66d9faf9f110b036a.bindTooltip(
+                `<div>
+                     Ulaşım: Langdorp
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_af112f663153b4f66d9faf9f110b036a.setIcon(icon_58592db40eb0f76fd46da03a662ffd2e);
+            
+    
+            var marker_3b0efd18678c906879e8a27f5b0f7910 = L.marker(
+                [50.9844425, 4.8240803],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_f1e031dca555a03c76deca4ea1273b39 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_b73fef113d7791e2c0d2cc494029fe2b = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_dcbde245b4782fc3b2972b849a4ed146 = $(`<div id="html_dcbde245b4782fc3b2972b849a4ed146" style="width: 100.0%; height: 100.0%;">Ulaşım: Aarschot<br>Yürüme: 2.65 km, 33 dk<br>Araba: 2.97 km, 5 dk</div>`)[0];
+                popup_b73fef113d7791e2c0d2cc494029fe2b.setContent(html_dcbde245b4782fc3b2972b849a4ed146);
+            
+        
+
+        marker_3b0efd18678c906879e8a27f5b0f7910.bindPopup(popup_b73fef113d7791e2c0d2cc494029fe2b)
+        ;
+
+        
+    
+    
+            marker_3b0efd18678c906879e8a27f5b0f7910.bindTooltip(
+                `<div>
+                     Ulaşım: Aarschot
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_3b0efd18678c906879e8a27f5b0f7910.setIcon(icon_f1e031dca555a03c76deca4ea1273b39);
+            
+    
+            var marker_cc10610873c52ad29e604a7f15742537 = L.marker(
+                [50.9937522, 4.8480245],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_31268f524ab23b75b591a46a86e14187 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c329fc5351ce08f124780a4b4ca80bc9 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_1e2bfc6e230bdcdbc23d50f3eca999fa = $(`<div id="html_1e2bfc6e230bdcdbc23d50f3eca999fa" style="width: 100.0%; height: 100.0%;">Ulaşım: Aarschot Medisch Centrum<br>Yürüme: 186 m, 2 dk<br>Araba: 209 m, 0 dk</div>`)[0];
+                popup_c329fc5351ce08f124780a4b4ca80bc9.setContent(html_1e2bfc6e230bdcdbc23d50f3eca999fa);
+            
+        
+
+        marker_cc10610873c52ad29e604a7f15742537.bindPopup(popup_c329fc5351ce08f124780a4b4ca80bc9)
+        ;
+
+        
+    
+    
+            marker_cc10610873c52ad29e604a7f15742537.bindTooltip(
+                `<div>
+                     Ulaşım: Aarschot Medisch Centrum
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_cc10610873c52ad29e604a7f15742537.setIcon(icon_31268f524ab23b75b591a46a86e14187);
+            
+    
+            var marker_2a30ff216e59bf09c585ff18f7d62e29 = L.marker(
+                [50.9936527, 4.8479503],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_bc4725daa0174994b289331c34b945b8 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_775e68950a6edef41823c20c3ebcd9d8 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_2dfaf025b4b9349540e736fff0b0febf = $(`<div id="html_2dfaf025b4b9349540e736fff0b0febf" style="width: 100.0%; height: 100.0%;">Ulaşım: Aarschot Medisch Centrum<br>Yürüme: 200 m, 2 dk<br>Araba: 224 m, 0 dk</div>`)[0];
+                popup_775e68950a6edef41823c20c3ebcd9d8.setContent(html_2dfaf025b4b9349540e736fff0b0febf);
+            
+        
+
+        marker_2a30ff216e59bf09c585ff18f7d62e29.bindPopup(popup_775e68950a6edef41823c20c3ebcd9d8)
+        ;
+
+        
+    
+    
+            marker_2a30ff216e59bf09c585ff18f7d62e29.bindTooltip(
+                `<div>
+                     Ulaşım: Aarschot Medisch Centrum
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_2a30ff216e59bf09c585ff18f7d62e29.setIcon(icon_bc4725daa0174994b289331c34b945b8);
+            
+    
+            var marker_0610ebc32cab47f0801fa676d84da3ef = L.marker(
+                [50.9934518, 4.851362],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_1da559cbaa3bde2b82713f4bffc4fffc = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c4705fecfee9d772b80a7e13128ba730 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_a83e63cd4561a6b72749376ba144e867 = $(`<div id="html_a83e63cd4561a6b72749376ba144e867" style="width: 100.0%; height: 100.0%;">Ulaşım: Langdorp Cranenskapelstraat<br>Yürüme: 202 m, 3 dk<br>Araba: 226 m, 0 dk</div>`)[0];
+                popup_c4705fecfee9d772b80a7e13128ba730.setContent(html_a83e63cd4561a6b72749376ba144e867);
+            
+        
+
+        marker_0610ebc32cab47f0801fa676d84da3ef.bindPopup(popup_c4705fecfee9d772b80a7e13128ba730)
+        ;
+
+        
+    
+    
+            marker_0610ebc32cab47f0801fa676d84da3ef.bindTooltip(
+                `<div>
+                     Ulaşım: Langdorp Cranenskapelstraat
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_0610ebc32cab47f0801fa676d84da3ef.setIcon(icon_1da559cbaa3bde2b82713f4bffc4fffc);
+            
+    
+            var marker_4931c0540409ce8064a2e8f4bb5e5e3b = L.marker(
+                [50.98843750197864, 4.855124449773889],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_36094655ddc19bff5b71a3c17066c5cc = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_d9182e23d22219aed9aa524ed6cf55ab = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_b55f1aa0a43ab7d56b48c13be23dd2e5 = $(`<div id="html_b55f1aa0a43ab7d56b48c13be23dd2e5" style="width: 100.0%; height: 100.0%;">Park: None<br>Yürüme: 965 m, 12 dk<br>Araba: 1.08 km, 2 dk</div>`)[0];
+                popup_d9182e23d22219aed9aa524ed6cf55ab.setContent(html_b55f1aa0a43ab7d56b48c13be23dd2e5);
+            
+        
+
+        marker_4931c0540409ce8064a2e8f4bb5e5e3b.bindPopup(popup_d9182e23d22219aed9aa524ed6cf55ab)
+        ;
+
+        
+    
+    
+            marker_4931c0540409ce8064a2e8f4bb5e5e3b.bindTooltip(
+                `<div>
+                     Park: None
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_4931c0540409ce8064a2e8f4bb5e5e3b.setIcon(icon_36094655ddc19bff5b71a3c17066c5cc);
+            
+    
+            var marker_18ae069d6ccc9ae9a14d25efaa284a0b = L.marker(
+                [50.9985071438535, 4.862406310554006],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_828eda33ef8c3c57a3d6f84286616fae = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_82af4ee1c3cb7b3958c89bbec401f784 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_ac6a0e11a85274ac71a91f43affc416b = $(`<div id="html_ac6a0e11a85274ac71a91f43affc416b" style="width: 100.0%; height: 100.0%;">Park: None<br>Yürüme: 1.24 km, 15 dk<br>Araba: 1.38 km, 2 dk</div>`)[0];
+                popup_82af4ee1c3cb7b3958c89bbec401f784.setContent(html_ac6a0e11a85274ac71a91f43affc416b);
+            
+        
+
+        marker_18ae069d6ccc9ae9a14d25efaa284a0b.bindPopup(popup_82af4ee1c3cb7b3958c89bbec401f784)
+        ;
+
+        
+    
+    
+            marker_18ae069d6ccc9ae9a14d25efaa284a0b.bindTooltip(
+                `<div>
+                     Park: None
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_18ae069d6ccc9ae9a14d25efaa284a0b.setIcon(icon_828eda33ef8c3c57a3d6f84286616fae);
+            
+    
+            var marker_2b6508aa2b8aa1ecad8866abab4530bb = L.marker(
+                [50.987733377151685, 4.838714781052794],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_0d9241d6cf4906207f1b4c6b0a6480a3 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_9d1fd8429868529c3e57ef64e850d069 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_536fbccedad72f9717ccdfea4088bf1e = $(`<div id="html_536fbccedad72f9717ccdfea4088bf1e" style="width: 100.0%; height: 100.0%;">Park: None<br>Yürüme: 1.35 km, 17 dk<br>Araba: 1.51 km, 3 dk</div>`)[0];
+                popup_9d1fd8429868529c3e57ef64e850d069.setContent(html_536fbccedad72f9717ccdfea4088bf1e);
+            
+        
+
+        marker_2b6508aa2b8aa1ecad8866abab4530bb.bindPopup(popup_9d1fd8429868529c3e57ef64e850d069)
+        ;
+
+        
+    
+    
+            marker_2b6508aa2b8aa1ecad8866abab4530bb.bindTooltip(
+                `<div>
+                     Park: None
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_2b6508aa2b8aa1ecad8866abab4530bb.setIcon(icon_0d9241d6cf4906207f1b4c6b0a6480a3);
+            
+    
+            var marker_5bc2002f1b492a2c4475f3472296fab7 = L.marker(
+                [50.988068605782644, 4.8380990109752116],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_9191dbb46ddb687d8d8b6b6f0c592c85 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_2c17762f565c1fdc2b14614d7c0ed425 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_cecc779730f789830b5a04aa15a95034 = $(`<div id="html_cecc779730f789830b5a04aa15a95034" style="width: 100.0%; height: 100.0%;">Park: None<br>Yürüme: 1.36 km, 17 dk<br>Araba: 1.52 km, 3 dk</div>`)[0];
+                popup_2c17762f565c1fdc2b14614d7c0ed425.setContent(html_cecc779730f789830b5a04aa15a95034);
+            
+        
+
+        marker_5bc2002f1b492a2c4475f3472296fab7.bindPopup(popup_2c17762f565c1fdc2b14614d7c0ed425)
+        ;
+
+        
+    
+    
+            marker_5bc2002f1b492a2c4475f3472296fab7.bindTooltip(
+                `<div>
+                     Park: None
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_5bc2002f1b492a2c4475f3472296fab7.setIcon(icon_9191dbb46ddb687d8d8b6b6f0c592c85);
+            
+    
+            var marker_29a9606c911b1256c208b824c8e80901 = L.marker(
+                [50.98272988807192, 4.852059843799205],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_d1ca96c356961a8f50a1da0e1cb166af = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_db181c15b0cdf82e5e52d5b9de566808 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_d48db69cec433c3d463662e67afe9053 = $(`<div id="html_d48db69cec433c3d463662e67afe9053" style="width: 100.0%; height: 100.0%;">Park: None<br>Yürüme: 1.65 km, 21 dk<br>Araba: 1.85 km, 3 dk</div>`)[0];
+                popup_db181c15b0cdf82e5e52d5b9de566808.setContent(html_d48db69cec433c3d463662e67afe9053);
+            
+        
+
+        marker_29a9606c911b1256c208b824c8e80901.bindPopup(popup_db181c15b0cdf82e5e52d5b9de566808)
+        ;
+
+        
+    
+    
+            marker_29a9606c911b1256c208b824c8e80901.bindTooltip(
+                `<div>
+                     Park: None
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_29a9606c911b1256c208b824c8e80901.setIcon(icon_d1ca96c356961a8f50a1da0e1cb166af);
+            
+    
+            var marker_958f5a2a1641c60fe9e00f5132dfa8e7 = L.marker(
+                [50.9994649, 4.8339074],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_681823d1521c0cb8b41bfd186e684912 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "cadetblue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_0cf15ebcc01406c1415233399c451785 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_dca67cce2920e5f1e28865d6f625278f = $(`<div id="html_dca67cce2920e5f1e28865d6f625278f" style="width: 100.0%; height: 100.0%;">Spor: Basic-Fit<br>Yürüme: 1.55 km, 19 dk<br>Araba: 1.74 km, 3 dk</div>`)[0];
+                popup_0cf15ebcc01406c1415233399c451785.setContent(html_dca67cce2920e5f1e28865d6f625278f);
+            
+        
+
+        marker_958f5a2a1641c60fe9e00f5132dfa8e7.bindPopup(popup_0cf15ebcc01406c1415233399c451785)
+        ;
+
+        
+    
+    
+            marker_958f5a2a1641c60fe9e00f5132dfa8e7.bindTooltip(
+                `<div>
+                     Spor: Basic-Fit
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_958f5a2a1641c60fe9e00f5132dfa8e7.setIcon(icon_681823d1521c0cb8b41bfd186e684912);
+            
+    
+            var marker_cfe1804fa488dd8c45cd26bf9ee02168 = L.marker(
+                [50.9844264, 4.8337695],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_df331f7be613e66d9ad6e8b891301d13 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "cadetblue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_fb1c09c891f27071dd9e46a4c192449c = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_6ff7e816b20e89c812cc57dadcf34419 = $(`<div id="html_6ff7e816b20e89c812cc57dadcf34419" style="width: 100.0%; height: 100.0%;">Spor: adYogini yoga studio<br>Yürüme: 1.98 km, 25 dk<br>Araba: 2.22 km, 4 dk</div>`)[0];
+                popup_fb1c09c891f27071dd9e46a4c192449c.setContent(html_6ff7e816b20e89c812cc57dadcf34419);
+            
+        
+
+        marker_cfe1804fa488dd8c45cd26bf9ee02168.bindPopup(popup_fb1c09c891f27071dd9e46a4c192449c)
+        ;
+
+        
+    
+    
+            marker_cfe1804fa488dd8c45cd26bf9ee02168.bindTooltip(
+                `<div>
+                     Spor: adYogini yoga studio
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_cfe1804fa488dd8c45cd26bf9ee02168.setIcon(icon_df331f7be613e66d9ad6e8b891301d13);
+            
+    
+            var marker_fbdc3d5523708cd2144b166826e2106d = L.marker(
+                [50.992853997533494, 4.851655588538795],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_5bb6b51196c8a6ebce0037f9e2fea269 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "cadetblue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_d8e1717d90121e5263b266f2fcc2c87f = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_48131b0e791c4a92609cd25bb9ef2fa6 = $(`<div id="html_48131b0e791c4a92609cd25bb9ef2fa6" style="width: 100.0%; height: 100.0%;">Spor: A.Tc.'82<br>Yürüme: 283 m, 4 dk<br>Araba: 317 m, 1 dk</div>`)[0];
+                popup_d8e1717d90121e5263b266f2fcc2c87f.setContent(html_48131b0e791c4a92609cd25bb9ef2fa6);
+            
+        
+
+        marker_fbdc3d5523708cd2144b166826e2106d.bindPopup(popup_d8e1717d90121e5263b266f2fcc2c87f)
+        ;
+
+        
+    
+    
+            marker_fbdc3d5523708cd2144b166826e2106d.bindTooltip(
+                `<div>
+                     Spor: A.Tc.'82
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_fbdc3d5523708cd2144b166826e2106d.setIcon(icon_5bb6b51196c8a6ebce0037f9e2fea269);
+            
+    
+            var marker_8d323ece7cb3e703dd3249b5cf1c7b8b = L.marker(
+                [50.9852599995486, 4.843550772528785],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_cd3f88b59c8c458d38bfd2f838ac4a5d = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "cadetblue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_dd05b919cefdefa534f3d0cc1d75f46a = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_762dd6f036013d1bd1a42622aa2ba1fc = $(`<div id="html_762dd6f036013d1bd1a42622aa2ba1fc" style="width: 100.0%; height: 100.0%;">Spor: BMX Team Bekaf<br>Yürüme: 1.40 km, 17 dk<br>Araba: 1.56 km, 3 dk</div>`)[0];
+                popup_dd05b919cefdefa534f3d0cc1d75f46a.setContent(html_762dd6f036013d1bd1a42622aa2ba1fc);
+            
+        
+
+        marker_8d323ece7cb3e703dd3249b5cf1c7b8b.bindPopup(popup_dd05b919cefdefa534f3d0cc1d75f46a)
+        ;
+
+        
+    
+    
+            marker_8d323ece7cb3e703dd3249b5cf1c7b8b.bindTooltip(
+                `<div>
+                     Spor: BMX Team Bekaf
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_8d323ece7cb3e703dd3249b5cf1c7b8b.setIcon(icon_cd3f88b59c8c458d38bfd2f838ac4a5d);
+            
+    
+            var marker_eef5d31d995c2cedb37eb323557f0a39 = L.marker(
+                [50.98382267569029, 4.840135468166107],
+                {
+}
+            ).addTo(map_0ed7d96567f554232ef3fb8bd9074a00);
+        
+    
+            var icon_5436023933f454ddce7f8ee77a6244d6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "cadetblue",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_06a8244160fe9434d41be9eced59aac1 = L.popup({
+  "maxWidth": "100%",
+});
+
+        
+            
+                var html_4307f0c4d079386875fbeb93db0f11a2 = $(`<div id="html_4307f0c4d079386875fbeb93db0f11a2" style="width: 100.0%; height: 100.0%;">Spor: Stedelijke sporthal<br>Yürüme: 1.71 km, 21 dk<br>Araba: 1.91 km, 3 dk</div>`)[0];
+                popup_06a8244160fe9434d41be9eced59aac1.setContent(html_4307f0c4d079386875fbeb93db0f11a2);
+            
+        
+
+        marker_eef5d31d995c2cedb37eb323557f0a39.bindPopup(popup_06a8244160fe9434d41be9eced59aac1)
+        ;
+
+        
+    
+    
+            marker_eef5d31d995c2cedb37eb323557f0a39.bindTooltip(
+                `<div>
+                     Spor: Stedelijke sporthal
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_eef5d31d995c2cedb37eb323557f0a39.setIcon(icon_5436023933f454ddce7f8ee77a6244d6);
+            
+</script>
+</html>

@@ -1,0 +1,12 @@
+$nodes = (Resolve-Path .\cache\be_poi.parquet).Path
+$polys = (Resolve-Path .\cache\be_poi_poly.parquet).Path
+
+python .\app_duckdb.py `
+  --address "Tervuursesteenweg 147, 3001 Heverlee, Belgium" `
+  --radius 2500 `
+  --nodes "$nodes" `
+  --polys "$polys"
+
+start .\map.html
+
+---------------------------------------------------------------------
