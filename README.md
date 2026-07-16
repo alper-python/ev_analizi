@@ -1,236 +1,156 @@
+# Ev Çevresi Analizi (Belçika · OSM + DuckDB)
 
+Bir **adres** (veya koordinat) verdiğinizde, çevredeki **okul, market, sağlık, ulaşım, park ve spor** noktalarını (POI) bulur; her nokta için **yürüme/araç mesafe–süre** tahmini yapar; kategori bazlı ve genel **0–10 yaşanabilirlik puanı** hesaplar. Sonuçları hem **web arayüzünde** (interaktif harita + skor paneli) hem de **komut satırında** (konsol + `map.html`) sunar.
 
-# Belçika Ev Çevresi Analizi (OSM + DuckDB)
+Arayüz **üç dilli**: Türkçe / İngilizce / Felemenkçe.
 
-Adres verdiğinizde, yakın çevredeki **okul**, **market**, **sağlık**, **ulaşım**, **park**, **spor** POI’lerini bulur; **yürüme/araç mesafe–süre** hesaplar ve **harita** üretir.
-İnternet gerektirmez (sadece ilk çalıştırmada **adres geocode** için Nominatim kullanır).
-
-## 0) Kullanılan dosyalar
-
-* **app\_duckdb.py** → Analiz ve harita (node + polygon cache birleştirir).
-* **build\_poi\_cache.py** → **Node cache** üretir → `cache/be_poi.parquet`
-* **build\_poi\_poly\_cache\_osmium.py** → **Polygon (area) cache** üretir → `cache/be_poi_poly.parquet`
-
-> `app.py` ve `build_poi_poly_cache_pyrosm.py` eskidir; kullanılmaz.
+Veri kaynağı OpenStreetMap'in Belçika verisi. Analiz çevrimdışı parquet cache üzerinden çalışır; internet yalnızca (1) adres çözümleme (Nominatim) ve (2) web arayüzünün tarayıcı bileşenleri (harita, React) için gerekir.
 
 ---
 
-## 1) Gereksinimler
-
-* **Python 3.11** (önerilen; `osmium` wheel’ı sorunsuz gelir)
-* Windows, macOS veya Linux (Windows için PowerShell komutları aşağıda)
-* SSD’de birkaç GB boş alan (PBF + cache)
-
----
-
-## 2) Klasör yapısı (öneri)
+## Mimari
 
 ```
-belgium-location/
-  app_duckdb.py
-  build_poi_cache.py
-  build_poi_poly_cache_osmium.py
-  data/
-    belgium-latest.osm.pbf
-  cache/
-    be_poi.parquet
-    be_poi_poly.parquet
-  .venv/  (sanalkurulum)
+data/belgium-latest.osm.pbf                (ham OSM verisi, tek seferlik indirilir)
+        │  build_poi_cache.py               → cache/be_poi.parquet        (node POI'ler)
+        │  build_poi_poly_cache_osmium.py   → cache/be_poi_poly.parquet   (alan/polygon POI centroid'leri)
+        ▼
+app_duckdb.py : run_analysis()             ← analiz çekirdeği (DuckDB ile parquet'i sorgular)
+        ├── main()   → CLI: konsol çıktısı + map.html (folium)
+        └── server.py → Flask JSON API + statik frontend
+                          static/index.html + support.js  (Leaflet haritalı SPA)
 ```
+
+- **Parquet + DuckDB:** Parquet dosyaları salt-okunur "tablolar", DuckDB ise onları SQL ile sorgulayan gömülü motor. Ayrı bir veritabanı sunucusu yok; sorgular bounding-box ön filtresi + Haversine mesafesi ile milisaniyeler içinde çalışır.
+- **Tek çekirdek:** Hem CLI hem web API aynı `run_analysis()` fonksiyonunu kullanır (puanlama tek yerde).
+
+## Dosyalar
+
+| Dosya | Görev |
+|---|---|
+| `belgium-location/app_duckdb.py` | Analiz çekirdeği (`run_analysis`) + CLI (`main`) + folium harita |
+| `belgium-location/server.py` | Flask web API (`/api/analyze`, `/api/health`) + statik frontend servis |
+| `belgium-location/build_poi_cache.py` | PBF → node POI cache (`be_poi.parquet`) |
+| `belgium-location/build_poi_poly_cache_osmium.py` | PBF → polygon POI centroid cache (`be_poi_poly.parquet`) |
+| `belgium-location/static/index.html` | Frontend (Claude Design çıktısı, üç dilli SPA) |
+| `belgium-location/static/support.js` | Frontend runtime (React'i CDN'den yükler) |
+| `docs/FRONTEND_DESIGN_BRIEF.md` | Tasarım brief'i (i18n, ekranlar, API sözleşmesi) |
+| `docs/FRONTEND_PLAN.md` | Yol haritası ve yapılacaklar |
 
 ---
 
-## 3) Sanal ortam ve kurulum
+## 1) Kurulum
 
-### Windows (PowerShell)
+Gereksinim: **Python 3.11** (osmium wheel'ı sorunsuz gelir).
 
 ```powershell
-cd path\to\belgium-location
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-python -m pip install --upgrade pip
-python -m pip install duckdb pyarrow pandas folium geopy osmium shapely
-```
-
-### macOS / Linux
-
-```bash
-cd /path/to/belgium-location
-python3.11 -m venv .venv
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-python -m pip install duckdb pyarrow pandas folium geopy osmium shapely
-```
-
-> **Not:** Python 3.12 ile `osmium` bazen wheel bulamaz. O durumda 3.11 kullanın.
-
----
-
-## 4) PBF dosyasını ekle
-
-`data/` içine **belgium-latest.osm.pbf** dosyasını koyun. (Genelde “Geofabrik”’ten indiriliyor.)
-
----
-
-## 5) Cache üretimi (tek seferlik)
-
-> Bu adımlar **ülke genelinde** tek kez yapılır; sonra sorgular çok hızlıdır.
-
-### 5.1 Node cache
-
-```powershell
-python .\build_poi_cache.py --pbf ".\data\belgium-latest.osm.pbf" --out ".\cache\be_poi.parquet"
-```
-
-### 5.2 Polygon (area) cache
-
-Büyük marketler (Colruyt/Delhaize) ve hastaneler (UZ Gasthuisberg gibi) genelde **alan** olarak etiketli; bu yüzden polygon cache şart.
-
-```powershell
-python .\build_poi_poly_cache_osmium.py --pbf ".\data\belgium-latest.osm.pbf" --out ".\cache\be_poi_poly.parquet"
-```
-
-> İpuçları:
->
-> * İlk çalıştırma **uzun** sürebilir (CPU+disk yoğun).
-> * İşlem biterken konsolda **\[DONE] …** görürsünüz.
-> * `cache/` içinde iki dosya oluşmalı:
->
->   * `be_poi.parquet` (node)
->   * `be_poi_poly.parquet` (polygon)
-
----
-
-## 6) Analizi çalıştırma
-
-**Temel:**
-
-```powershell
-$nodes = (Resolve-Path .\cache\be_poi.parquet).Path
-$polys = (Resolve-Path .\cache\be_poi_poly.parquet).Path
-
-python .\app_duckdb.py `
-  --address "Tervuursesteenweg 147, 3001 Heverlee, Belgium" `
-  --radius 2500 `
-  --nodes "$nodes" `
-  --polys "$polys"
-
-start .\map.html
-```
-
-**Alternatif:** Koordinatla çalıştırma
-
-```powershell
-python .\app_duckdb.py --lat 50.876182 --lon 4.680335 --radius 2500 --nodes "$nodes" --polys "$polys"
-start .\map.html
-```
-
-> `app_duckdb.py`, node veya polygon cache’ten biri eksikse **otomatik** sadece olanı kullanarak devam eder (fallback).
-
----
-
-## 7) Çıktılar
-
-* **Konsol:** Her kategori için TOP-N liste + yürüme/araç **mesafe ve süre**.
-* **Harita:** Kök dizine `map.html` kaydeder.
-
-  * Marker renkleri kategorilere göre (altta **Legenda** kutusu var).
-  * Her marker popup’ında yürüme/araç mesafe-süre.
-
----
-
-## 8) Parametreler
-
-* `--address` veya `--lat --lon`
-* `--radius` (metre) → varsayılan 2500
-* `--topn` → her kategori için döndürülecek öğe sayısı (varsayılan 5)
-* `--nodes`, `--polys` → cache dosyalarının yolları
-
-**Hız/mesafe modeli (yaklaşık):**
-
-* Yürüme hızı **4.8 km/s**, dolaşıklık (circuity) **1.25**
-* Araç hızı **35 km/s**, dolaşıklık **1.40**
-
-> Bu değerleri `app_duckdb.py` başında değiştirebilirsiniz.
-
----
-
-## 9) Sık karşılaşılan hatalar & çözümler
-
-* **“Node cache yok: …”**
-  → Yol yanlış olabilir. Önce kontrol edin:
-
-  ```powershell
-  pwd; ls .\cache
-  $nodes = (Resolve-Path .\cache\be_poi.parquet).Path
-  ```
-
-  Sonra komutta **\$nodes** kullanın.
-
-* **`brand not found in FROM clause` (DuckDB)**
-  → Eski `app_duckdb.py` kullanılıyor. Güncel dosyada node tarafı `NULL AS brand` ile seçilir.
-  `Select-String -Path .\app_duckdb.py -Pattern "NULL AS brand"` ile doğrulayın.
-
-* **`osmium` kurulamadı**
-  → Python 3.11 venv kullanın veya OS’te uygun wheel yükleyin.
-
-* **Cache çok yavaş oluşuyor**
-  → Normaldir (tek seferlik). SSD kullanın; antivirüs real-time taramasını bu klasör için geçici kapatabilirsiniz.
-
-* **Harita açılmıyor**
-  → Komuttan sonra `map.html` üretildiyse:
-
-  ```powershell
-  start .\map.html
-  ```
-
----
-
-## 10) Güncelleme & tekrar cache
-
-OSM verisini yenilemek isterseniz:
-
-1. `data/belgium-latest.osm.pbf` dosyasını güncelleyin.
-2. **İki** builder’ı yeniden çalıştırın:
-
-   ```powershell
-   python .\build_poi_cache.py --pbf ".\data\belgium-latest.osm.pbf" --out ".\cache\be_poi.parquet"
-   python .\build_poi_poly_cache_osmium.py --pbf ".\data\belgium-latest.osm.pbf" --out ".\cache\be_poi_poly.parquet"
-   ```
-
----
-
-## 11) Kategori/Skor mantığını özelleştirme
-
-* Kategoriler ve marker renkleri: `app_duckdb.py` içindeki `CATS` sözlüğü.
-* Sıralama ağırlıkları: `SCORES` sözlüğü (SQL CASE ifadeleri).
-* POI etiket kapsamı: builder’larda (`build_poi_cache.py` & `build_poi_poly_cache_osmium.py`) `amenity/shop/healthcare/...` kümelerini genişletebilirsiniz.
-
-  > Örn. marketler için `shop=department_store` eklemek gibi.
-
----
-
-## 12) Minimum hızlı kurulum (özet)
-
-```powershell
-# 1) venv
+cd belgium-location
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -U pip
-python -m pip install duckdb pyarrow pandas folium geopy osmium shapely
+python -m pip install -r requirements.txt
+```
 
-# 2) PBF -> data/
-# belgium-latest.osm.pbf dosyasını .\data içine koy
+macOS / Linux:
 
-# 3) Cache (tek sefer)
-python .\build_poi_cache.py --pbf ".\data\belgium-latest.osm.pbf" --out ".\cache\be_poi.parquet"
-python .\build_poi_poly_cache_osmium.py --pbf ".\data\belgium-latest.osm.pbf" --out ".\cache\be_poi_poly.parquet"
+```bash
+cd belgium-location
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+```
 
-# 4) Analiz + Harita
-$nodes = (Resolve-Path .\cache\be_poi.parquet).Path
-$polys = (Resolve-Path .\cache\be_poi_poly.parquet).Path
-python .\app_duckdb.py --address "Tervuursesteenweg 147, 3001 Heverlee, Belgium" --radius 2500 --nodes "$nodes" --polys "$polys"
+## 2) Veri ve cache (tek seferlik)
+
+`data/` içine Belçika PBF'ini indirin (~650 MB):
+
+```powershell
+curl.exe -L -o ..\data\belgium-latest.osm.pbf https://download.geofabrik.de/europe/belgium-latest.osm.pbf
+```
+
+İki cache'i üretin (CPU+disk yoğun; node cache ~25 dk, polygon ~5 dk sürebilir):
+
+```powershell
+python .\build_poi_cache.py            --pbf "..\data\belgium-latest.osm.pbf" --out "..\cache\be_poi.parquet"
+python .\build_poi_poly_cache_osmium.py --pbf "..\data\belgium-latest.osm.pbf" --out "..\cache\be_poi_poly.parquet"
+```
+
+Bitince `cache/` içinde iki `.parquet` dosyası oluşur (konsolda `[DONE]`).
+
+---
+
+## 3) Web arayüzü
+
+```powershell
+# Cache repo kökündeyse yollarını ortam değişkeniyle verin:
+$env:POI_NODES = (Resolve-Path ..\cache\be_poi.parquet).Path
+$env:POI_POLYS = (Resolve-Path ..\cache\be_poi_poly.parquet).Path
+python .\server.py
+```
+
+Tarayıcıda **http://127.0.0.1:5000** açın. Adres girip "Analiz et" deyin — harita, puanlar ve kategori kartları gelir. Sağ üstten **dil (TR/EN/NL)** ve **tema (açık/koyu)** değiştirilebilir.
+
+> Web arayüzü ilk render'da React/Leaflet/font'ları CDN'den çeker → **internet gerekir**. İnternetsiz/kurumsal ortam için bu bağımlılıkları yerelde barındırmak gerekir (bkz. `docs/FRONTEND_PLAN.md`).
+
+### API
+
+`POST /api/analyze` — gövde: `{ "address"?, "lat"?, "lon"?, "radius"=2500, "topn"=5, "lang"="tr" }`
+
+```json
+{
+  "display_address": "…", "lat": 50.876, "lon": 4.680, "radius": 2500, "lang": "tr",
+  "overall": 7.4,
+  "categories": [
+    { "key": "market", "label": "Market", "score": 8.2, "count": 12, "nearest_m": 350,
+      "has_hospital": null,
+      "items": [ { "name": "Colruyt", "brand": "Colruyt", "lat": 50.877, "lon": 4.682,
+                   "walk_m": 440, "walk_min": 6, "drive_m": 490, "drive_min": 1 } ] }
+  ]
+}
+```
+
+Hata durumları: `400` (adres bulunamadı / parametre hatası), `502` (geocode servisi), `503` (cache yok). Sonuçsuz bölge: `200` + `note` alanı. Mesajlar `lang`'e göre çevrilir.
+
+`GET /api/health` — cache dosyalarının durumunu döndürür.
+
+---
+
+## 4) Komut satırı (harita üreten CLI)
+
+```powershell
+$env:POI_NODES = (Resolve-Path ..\cache\be_poi.parquet).Path   # opsiyonel; varsayılan ./cache/...
+python .\app_duckdb.py --address "Tervuursesteenweg 147, 3001 Heverlee, Belgium" --radius 2500 `
+  --nodes ..\cache\be_poi.parquet --polys ..\cache\be_poi_poly.parquet
 start .\map.html
 ```
+
+Koordinatla: `--lat 50.876182 --lon 4.680335` (adres yerine).
+
+**Parametreler:** `--address` veya `--lat/--lon`; `--radius` (m, vars. 2500); `--topn` (kategori başına, vars. 5); `--nodes`, `--polys` (cache yolları).
+
+---
+
+## 5) Puanlama
+
+- **Kategori içi sıralama:** POI türüne göre SQL ağırlıkları (`SCORES`, `app_duckdb.py`).
+- **Kategori puanı (0–10):** yakınlık (doygunluk mesafesi `D0`) + adet doygunluğu (`Nsat`) + sağlıkta hastane bonusu (`SCORING`).
+- **Genel puan:** kategori ağırlıkları (`OVERALL_WEIGHTS`) ile normalize edilmiş ortalama.
+- **Mesafe/süre modeli (yaklaşık):** yürüme 4.8 km/s (dolaşıklık ×1.25), araç 35 km/s (×1.40) — kuş uçuşu mesafeye uygulanır. Gerçek rota süreleri için ileride OSRM/Valhalla entegrasyonu düşünülebilir.
+
+Kategoriler, renkler, dil etiketleri ve puan parametreleri `app_duckdb.py` başındaki sözlüklerden ayarlanır.
+
+## 6) Veriyi güncel tutma
+
+Cache bir **anlık görüntüdür**. Güncellemek için PBF'i yeniden indirip iki builder'ı tekrar çalıştırın (Geofabrik günlük güncelleniyor). Her zaman canlı veri için Overpass tabanlı hibrit mod fikri `docs/FRONTEND_PLAN.md` içinde not edilmiştir.
+
+## 7) Sık karşılaşılan sorunlar
+
+- **Web'de "sunucu hatası" / API 503:** cache dosyaları bulunamıyor. `GET /api/health` ile kontrol edin; `POI_NODES`/`POI_POLYS` yollarını doğrulayın.
+- **`osmium` kurulamadı:** Python 3.11 venv kullanın.
+- **Adres bulunamadı:** adresi posta koduyla yazın (ör. "Bondgenotenlaan 1, 3000 Leuven").
+- **Harita boş / arayüz yüklenmiyor:** internet (CDN) erişimini kontrol edin.
+
+---
+
+Veriler © OpenStreetMap katkıda bulunanları.
