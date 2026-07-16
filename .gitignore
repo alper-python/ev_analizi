@@ -31,3 +31,6 @@ data/**
 # Büyük dosya türlerini de garantiye al
 *.pbf
 *.parquet
+
+# Üretilen çıktılar
+map.html
