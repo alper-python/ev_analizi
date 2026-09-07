@@ -96,6 +96,36 @@
                 align-items: start
             }
             .category-grid > * { min-width: 0 }
+            .language-picker {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                min-height: 38px;
+                padding: 0 10px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--surface);
+                color: var(--ink);
+                font: 700 12px Manrope
+            }
+            .language-picker select {
+                border: 0;
+                background: transparent;
+                color: inherit;
+                font: inherit;
+                cursor: pointer;
+                outline: none
+            }
+            .poi-identity { min-width: 0 }
+            .poi-distances {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px 14px;
+                margin-top: 6px;
+                color: var(--muted);
+                font: 600 11.5px/1.4 Manrope
+            }
+            .poi-distance { display: inline-flex; align-items: center; gap: 4px }
 
             @media (max-width: 1199px) {
                 .analysis-layout {
@@ -118,9 +148,20 @@
                 .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) }
             }
 
+            @media (min-width: 1200px) {
+                .app-header { min-height: 61px; box-sizing: border-box }
+                .map-pane {
+                    position: sticky !important;
+                    top: 69px !important;
+                    height: calc(100vh - 77px) !important;
+                    min-height: min(360px, calc(100vh - 77px)) !important;
+                    max-height: calc(100vh - 77px);
+                    align-self: flex-start
+                }
+            }
+
             @media (max-width: 520px) {
-                .poi-row { align-items: flex-start !important; flex-direction: column }
-                .poi-drive { text-align: left !important }
+                .poi-distances { flex-direction: column; align-items: flex-start; gap: 4px }
             }
         </style>
     </helmet>
@@ -137,11 +178,12 @@
                         <div style="font-weight:800;font-size:16px;letter-spacing:-0.01em">{{ t.brand }}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                        <div style="display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px;gap:2px">
-                            <sc-for list="{{ langOpts }}" as="l" hint-placeholder-count="3">
-                                <button onClick="{{ l.pick }}" style="{{ l.style }}">{{ l.label }}</button>
-                            </sc-for>
-                        </div>
+                        <label class="language-picker">
+                            <span aria-hidden="true">🌐</span>
+                            <select value="{{ selectedLang }}" onChange="{{ onLanguageChange }}" aria-label="{{ t.language }}">
+                                <option value="tr">Türkçe</option><option value="nl">Nederlands</option><option value="en">English</option>
+                            </select>
+                        </label>
                         <button onClick="{{ toggleTheme }}"
                                 style="display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;font:600 12.5px Manrope">
                             {{ themeIcon }}{{ themeLabel }}
@@ -249,7 +291,7 @@
         <sc-if value="{{ isAnalysis }}" hint-placeholder-val="{{ false }}">
             <div data-screen-label="Analiz sonucu"
                  style="min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--ink)">
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:1100">
+                <div class="app-header" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:1100">
                     <button onClick="{{ goHome }}"
                             style="flex:none;padding:9px 14px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12.5px Manrope;cursor:pointer"
                             style-hover="background:var(--chip)">{{ t.newSearch }}
@@ -267,11 +309,12 @@
                                     style-hover="background:var(--chip)">{{ t.print }}
                             </button>
                         </sc-if>
-                        <div style="display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px;gap:2px">
-                            <sc-for list="{{ langOpts }}" as="l" hint-placeholder-count="3">
-                                <button onClick="{{ l.pick }}" style="{{ l.style }}">{{ l.label }}</button>
-                            </sc-for>
-                        </div>
+                        <label class="language-picker">
+                            <span aria-hidden="true">🌐</span>
+                            <select value="{{ selectedLang }}" onChange="{{ onLanguageChange }}" aria-label="{{ t.language }}">
+                                <option value="tr">Türkçe</option><option value="nl">Nederlands</option><option value="en">English</option>
+                            </select>
+                        </label>
                         <button onClick="{{ toggleTheme }}"
                                 style="flex:none;display:inline-flex;align-items:center;padding:9px 12px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer">
                             {{ themeIcon }}
@@ -313,10 +356,10 @@
 
                 <sc-if value="{{ notError }}" hint-placeholder-val="{{ false }}">
                     <div class="analysis-layout" style="display:flex;flex-wrap:wrap;align-items:stretch;flex:1">
-                        <div style="{{ mapBoxStyle }}">
+                        <div class="map-pane" style="{{ mapBoxStyle }}">
                             <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
                                 <div ref="{{ setMapEl }}" style="position:absolute;inset:0"></div>
-                                <div style="position:absolute;top:12px;left:12px;right:52px;z-index:900;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none">
+                                <div style="position:absolute;top:12px;left:56px;right:12px;z-index:900;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none">
                                     <sc-for list="{{ cats }}" as="cat" hint-placeholder-count="6">
                                         <button onClick="{{ cat.toggleFilter }}" style="{{ cat.chipStyle }}">{{
                                             cat.label }} · {{ cat.count }}
@@ -384,8 +427,13 @@
                                     <sc-for list="{{ resultRadiusOpts }}" as="opt" hint-placeholder-count="3">
                                         <button onClick="{{ opt.pick }}" style="{{ opt.style }}">{{ opt.label }}</button>
                                     </sc-for>
+                                    <button onClick="{{ toggleRadiusInfo }}" aria-expanded="{{ radiusInfoOpen }}"
+                                            style="padding:6px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.radiusHow }}</button>
                                     <sc-if value="{{ isRefreshing }}" hint-placeholder-val="{{ false }}">
                                         <span style="font:700 11.5px Manrope;color:#2E6FDB;animation:pulse 1.2s ease-in-out infinite">{{ t.refreshing }}</span>
+                                    </sc-if>
+                                    <sc-if value="{{ radiusInfoOpen }}" hint-placeholder-val="{{ false }}">
+                                        <div style="flex:1 0 100%;padding-top:2px;font:600 11.5px/1.5 Manrope;color:var(--muted)">{{ t.radiusNote }}</div>
                                     </sc-if>
                                 </div>
 
@@ -418,7 +466,17 @@
                                             <div style="padding:0 16px 11px 66px">
                                                 <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.marketHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:9px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">{{ cat.marketNote }}</div>
+                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                        <div>{{ cat.marketNote }}</div>
+                                                        <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
+                                                            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:9px 0">
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.proximityLabel }}</span><strong style="color:var(--ink)">{{ cat.proximityStr }} / 7</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.choiceLabel }}</span><strong style="color:var(--ink)">{{ cat.choiceStr }} / 3</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.marketScoreLabel }}</span><strong style="color:var(--ink)">{{ cat.scoreStr }} / 10</strong></div>
+                                                            </div>
+                                                            <div>{{ t.marketChoiceNote }}</div>
+                                                        </sc-if>
+                                                    </div>
                                                 </sc-if>
                                             </div>
                                         </sc-if>
@@ -430,21 +488,20 @@
                                                 <sc-for list="{{ cat.rows }}" as="row" hint-placeholder-count="5">
                                                     <div onMouseEnter="{{ row.enter }}" onMouseLeave="{{ row.leave }}"
                                                          class="poi-row"
-                                                         style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 16px;min-height:44px;box-sizing:border-box;border-bottom:1px solid var(--line)"
+                                                         style="padding:11px 16px;min-height:44px;box-sizing:border-box;border-bottom:1px solid var(--line)"
                                                          style-hover="background:var(--chip)">
-                                                        <div style="min-width:0">
+                                                        <div class="poi-identity">
                                                             <div style="font:700 13px Manrope;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                                                                 {{ row.name }}
                                                             </div>
                                                             <sc-if value="{{ row.typeStr }}" hint-placeholder-val="{{ false }}">
                                                                 <div style="font:600 10.5px Manrope;color:var(--muted);text-transform:capitalize">{{ row.typeStr }}</div>
                                                             </sc-if>
-                                                            <div style="font:600 11.5px Manrope;color:var(--muted)">{{
-                                                                row.walkStr }}
+                                                            <div class="poi-distances">
+                                                                <span class="poi-distance"><span aria-hidden="true">📍</span>{{ row.straightStr }}</span>
+                                                                <span class="poi-distance"><span aria-hidden="true">🚶</span>{{ row.walkStr }}</span>
+                                                                <span class="poi-distance"><span aria-hidden="true">🚗</span>{{ row.driveStr }}</span>
                                                             </div>
-                                                        </div>
-                                                        <div class="poi-drive" style="flex:none;text-align:right;font:600 11.5px Manrope;color:var(--muted)">
-                                                            {{ row.driveStr }}
                                                         </div>
                                                     </div>
                                                 </sc-for>
@@ -470,11 +527,12 @@
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
                         <div style="font:800 24px Manrope;letter-spacing:-0.02em">{{ t.styleGuide }}</div>
                         <div style="display:flex;align-items:center;gap:8px">
-                            <div style="display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px;gap:2px">
-                                <sc-for list="{{ langOpts }}" as="l" hint-placeholder-count="3">
-                                    <button onClick="{{ l.pick }}" style="{{ l.style }}">{{ l.label }}</button>
-                                </sc-for>
-                            </div>
+                            <label class="language-picker">
+                                <span aria-hidden="true">🌐</span>
+                                <select value="{{ selectedLang }}" onChange="{{ onLanguageChange }}" aria-label="{{ t.language }}">
+                                    <option value="tr">Türkçe</option><option value="nl">Nederlands</option><option value="en">English</option>
+                                </select>
+                            </label>
                             <button onClick="{{ goHome }}"
                                     style="padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12.5px Manrope;cursor:pointer"
                                     style-hover="background:var(--chip)">{{ t.sgBack }}
@@ -560,7 +618,7 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false,
+          selectedCoords: null, marketInfoOpen: false, radiusInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -588,7 +646,8 @@
             footer: 'Veriler © OpenStreetMap katkıda bulunanları', styleGuide: 'Stil rehberi',
             themeDark: 'Koyu tema', themeLight: 'Açık tema', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
             analyzing: 'Çevre analiz ediliyor…', overall: 'Genel yaşanabilirlik', radiusWord: 'Yarıçap',
-            points: 'nokta', nearest: 'en yakın:', walk: 'Yürüme', drive: 'Araçla', minU: 'dk',
+            language: 'Dil', points: 'nokta', nearest: 'en yakın:', straightSuffix: 'kuş uçuşu',
+            straightLine: 'Kuş uçuşu', estimatedWalk: 'Tahmini yürüyüş', estimatedDrive: 'Tahmini araç', walk: 'Yürüme', drive: 'Araçla', minU: 'dk',
             hospY: 'Hastane var', hospN: 'Hastane yok', cmp1: 'Karşılaştırma — yakında', cmp2: '2–3 adresi yan yana kıyaslayın (v2)',
             searched: 'Aranan adres', btnRetry: 'Tekrar dene', btnBigger: 'Yarıçapı 5 km yap ve tekrar dene', btnEdit: 'Adresi düzenle',
             formErrAddr: 'Lütfen bir adres girin.', formErrCoord: 'Geçerli bir enlem ve boylam girin.',
@@ -596,8 +655,11 @@
             errServerT: 'Sunucu hatası', errServerD: 'Analiz servisine şu anda ulaşılamıyor. Birkaç saniye sonra tekrar deneyin.',
             errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
-            marketHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', refreshing: 'Güncelleniyor…',
+            marketHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
+            radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
+            proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
+            marketChoiceNote: 'Yeterli sayıda market seçeneğine ulaşıldığında ek mağazalar seçenek puanını artırmaya devam etmez; güçlü bir market seçeneğine yakınlık fark yaratır.',
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -621,7 +683,8 @@
             footer: 'Data © OpenStreetMap contributors', styleGuide: 'Style guide',
             themeDark: 'Dark theme', themeLight: 'Light theme', newSearch: '← New search', print: 'Share / print report',
             analyzing: 'Analyzing the area…', overall: 'Overall liveability', radiusWord: 'Radius',
-            points: 'places', nearest: 'nearest:', walk: 'Walk', drive: 'Drive', minU: 'min',
+            language: 'Language', points: 'places', nearest: 'nearest:', straightSuffix: 'straight-line',
+            straightLine: 'Straight-line', estimatedWalk: 'Estimated walking', estimatedDrive: 'Estimated driving', walk: 'Walk', drive: 'Drive', minU: 'min',
             hospY: 'Hospital nearby', hospN: 'No hospital', cmp1: 'Comparison — coming soon', cmp2: 'Compare 2–3 addresses side by side (v2)',
             searched: 'Searched address', btnRetry: 'Try again', btnBigger: 'Set radius to 5 km and retry', btnEdit: 'Edit address',
             formErrAddr: 'Please enter an address.', formErrCoord: 'Enter a valid latitude and longitude.',
@@ -629,8 +692,11 @@
             errServerT: 'Server error', errServerD: 'The analysis service is currently unreachable. Please try again in a few seconds.',
             errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
-            marketHow: 'How is this calculated?', displayRadius: 'Display radius', refreshing: 'Updating…',
+            marketHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
+            radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
+            proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
+            marketChoiceNote: 'Once there are enough grocery options, additional stores no longer increase the choice points; proximity to a strong grocery option then makes the difference.',
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -654,7 +720,8 @@
             footer: 'Data © OpenStreetMap-bijdragers', styleGuide: 'Stijlgids',
             themeDark: 'Donker thema', themeLight: 'Licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
             analyzing: 'Omgeving wordt geanalyseerd…', overall: 'Algemene leefbaarheid', radiusWord: 'Straal',
-            points: 'plekken', nearest: 'dichtstbij:', walk: 'Te voet', drive: 'Met de auto', minU: 'min',
+            language: 'Taal', points: 'plekken', nearest: 'dichtstbij:', straightSuffix: 'hemelsbreed',
+            straightLine: 'Hemelsbreed', estimatedWalk: 'Geschatte wandelafstand', estimatedDrive: 'Geschatte rijafstand', walk: 'Te voet', drive: 'Met de auto', minU: 'min',
             hospY: 'Ziekenhuis aanwezig', hospN: 'Geen ziekenhuis', cmp1: 'Vergelijking — binnenkort', cmp2: 'Vergelijk 2–3 adressen naast elkaar (v2)',
             searched: 'Gezocht adres', btnRetry: 'Probeer opnieuw', btnBigger: 'Zet straal op 5 km en probeer opnieuw', btnEdit: 'Adres bewerken',
             formErrAddr: 'Voer een adres in.', formErrCoord: 'Voer een geldige breedte- en lengtegraad in.',
@@ -662,8 +729,11 @@
             errServerT: 'Serverfout', errServerD: 'De analysedienst is momenteel niet bereikbaar. Probeer het over enkele seconden opnieuw.',
             errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
-            marketHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', refreshing: 'Bijwerken…',
+            marketHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
+            radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
+            proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
+            marketChoiceNote: 'Zodra er genoeg winkelopties zijn, verhogen extra winkels de keuzepunten niet verder; de nabijheid van een sterke winkeloptie maakt dan het verschil.',
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -916,8 +986,9 @@
         d.categories.forEach(cat => {
           const g = L.layerGroup(); this.mk[cat.key] = [];
           cat.items.forEach((it, i) => {
+            const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
             const m = L.circleMarker([it.lat, it.lon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
-              .bindPopup('<b>' + it.name + '</b><br>' + t.walk + ': ' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>' + t.drive + ': ' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
+              .bindPopup('<b>' + it.name + '</b><br>📍 ' + t.straightLine + ': ' + this.fmtDist(straight) + '<br>🚶 ' + t.estimatedWalk + ': ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>🚗 ' + t.estimatedDrive + ': ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
             m.addTo(g); this.mk[cat.key][i] = m;
           });
           this.groups[cat.key] = g;
@@ -945,14 +1016,6 @@
         const rootStyle = dark
           ? { minHeight: '100vh', '--bg': '#11141b', '--surface': '#1a1f2a', '--ink': '#e9ecf2', '--muted': '#98a1b0', '--line': 'rgba(255,255,255,.09)', '--chip': '#242b38', '--shadow': '0 1px 3px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25)' }
           : { minHeight: '100vh' };
-
-        const langOpts = ['tr', 'en', 'nl'].map(code => ({
-          label: code.toUpperCase(),
-          pick: () => this.setLang(code),
-          style: S.lang === code
-            ? { padding: '7px 11px', minHeight: '32px', borderRadius: '999px', border: 'none', background: '#2E6FDB', color: '#fff', font: '800 11.5px Manrope', cursor: 'pointer' }
-            : { padding: '7px 11px', minHeight: '32px', borderRadius: '999px', border: 'none', background: 'transparent', color: 'var(--muted)', font: '700 11.5px Manrope', cursor: 'pointer' }
-        }));
 
         const radiusOpts = [[1000, '1 km'], [2500, '2,5 km'], [5000, '5 km']].map(([v, label]) => ({
           label: S.lang === 'tr' ? label : label.replace(',', '.'),
@@ -990,7 +1053,7 @@
         const mapBoxStyle = Object.assign(
           { flex: '3 1 480px', width: stacked ? '100%' : 'auto', minWidth: 0, position: 'relative', background: 'var(--chip)' },
           stacked ? { height: narrow ? '44vh' : '50vh', minHeight: narrow ? '300px' : '360px', flex: 'none' }
-                  : { height: 'calc(100vh - 61px)', minHeight: '420px' });
+                  : { position: 'sticky', top: '69px', height: 'calc(100vh - 77px)', minHeight: 'min(360px, calc(100vh - 77px))', maxHeight: 'calc(100vh - 77px)', alignSelf: 'flex-start' });
         const panelStyle = Object.assign(
           { flex: '2 1 360px', width: stacked ? '100%' : 'auto', minWidth: 0, overflow: 'visible', padding: narrow ? '14px' : '18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '1px solid var(--line)' },
           { maxHeight: 'none', height: 'auto', flexShrink: 0 });
@@ -1007,8 +1070,11 @@
             scoreStyle: { font: '800 17px Manrope', color: sc },
             barStyle: { height: '100%', width: (cat.score * 10) + '%', borderRadius: '3px', background: sc, transition: 'width .5s ease' },
             countStr: cat.count + ' ' + t.points,
-            nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m),
+            nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m) + ' ' + t.straightSuffix,
             marketNote: cat.key === 'market' ? t.marketNote : null,
+            hasBreakdown: cat.key === 'market' && !!cat.score_breakdown,
+            proximityStr: cat.score_breakdown ? this.fmtScore(cat.score_breakdown.proximity_points) : '',
+            choiceStr: cat.score_breakdown ? this.fmtScore(cat.score_breakdown.choice_points) : '',
             toggleInfo: () => this.setState({ marketInfoOpen: !this.state.marketInfoOpen }),
             limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
             badge: cat.key === 'health' ? (cat.has_hospital ? t.hospY : t.hospN) : null,
@@ -1027,14 +1093,18 @@
               border: '1px solid ' + (hid ? 'var(--line)' : col), background: hid ? 'var(--surface)' : col, color: hid ? 'var(--muted)' : '#fff',
               font: '700 ' + (narrow ? '11px' : '12px') + ' Manrope', cursor: 'pointer', boxShadow: 'var(--shadow)', opacity: hid ? 0.8 : 1
             },
-            rows: cat.items.map((it, i) => ({
-              name: it.name,
-              typeStr: it.type || '',
-              walkStr: t.walk + ' ' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
-              driveStr: t.drive + ' ' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,
-              enter: () => { const m = this.mk[cat.key] && this.mk[cat.key][i]; if (m) { m.setStyle({ radius: 12, weight: 3.5 }); m.bringToFront(); } },
-              leave: () => { const m = this.mk[cat.key] && this.mk[cat.key][i]; if (m) m.setStyle({ radius: 8, weight: 2 }); }
-            }))
+            rows: cat.items.map((it, i) => {
+              const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
+              return {
+                name: it.name,
+                typeStr: it.type || '',
+                straightStr: t.straightLine + ' ' + this.fmtDist(straight),
+                walkStr: t.estimatedWalk + ' ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
+                driveStr: t.estimatedDrive + ' ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,
+                enter: () => { const m = this.mk[cat.key] && this.mk[cat.key][i]; if (m) { m.setStyle({ radius: 12, weight: 3.5 }); m.bringToFront(); } },
+                leave: () => { const m = this.mk[cat.key] && this.mk[cat.key][i]; if (m) m.setStyle({ radius: 8, weight: 2 }); }
+              };
+            })
           };
         });
 
@@ -1053,7 +1123,7 @@
         const swatches = t.swNames.map((name, i) => ({ name, hex: swHex[i], style: { height: '52px', background: swHex[i], borderBottom: '1px solid var(--line)' } }));
 
         return {
-          rootStyle, t, langOpts,
+          rootStyle, t, selectedLang: S.lang, onLanguageChange: e => this.setLang(e.target.value),
           isHome: S.view === 'home', isAnalysis: S.view === 'analysis', isStyle: S.view === 'style',
           isLoading: S.view === 'analysis' && S.status === 'loading',
           isResults: S.view === 'analysis' && S.status === 'results',
@@ -1080,8 +1150,10 @@
             this.doSearch(la.toFixed(5) + ', ' + lo.toFixed(5));
           },
           radiusOpts, resultRadiusOpts, recent, hasRecent: recent.length > 0,
+          radiusInfoOpen: S.radiusInfoOpen,
+          toggleRadiusInfo: () => this.setState({ radiusInfoOpen: !this.state.radiusInfoOpen }),
           openStyle: e => { e.preventDefault(); this.setState({ view: 'style' }); },
-          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false }),
+          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false }),
           onPrint: () => window.print(),
           retry: () => this.doSearch(S.address || this.DEF_ADDR()),
           retryBigger: () => this.doSearch(S.address || this.DEF_ADDR(), 5000),

@@ -16,7 +16,10 @@ import pyarrow.parquet as pq
 import requests
 
 from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
-                        analyze_market, geocode, query_category)
+                        analyze_market, geocode, query_category,
+                        query_market_candidates)
+from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
+                            deduplicate_market_pois, market_type)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -194,14 +197,36 @@ def _value(value):
     return None if pd.isnull(value) else value
 
 
+def _market_score_breakdown(con, lat, lon, score):
+    """Describe the existing Market score without changing its calculation."""
+    scoring_rows = deduplicate_market_pois(query_market_candidates(
+        con, NODES_PATH, POLYS_PATH, lat, lon, MARKET_SCORING_RADIUS_M))
+    effective_count = sum(
+        MARKET_TYPE_WEIGHTS.get(market_type(row), 0.0) for row in scoring_rows)
+    choice_points = min(effective_count, 3.0)
+    proximity_points = max(0.0, min(7.0, float(score) - choice_points))
+    return {
+        "proximity_points": proximity_points,
+        "proximity_max": 7.0,
+        "choice_points": choice_points,
+        "choice_max": 3.0,
+        "effective_count": effective_count,
+        "effective_count_saturation": 3.0,
+        "final_score": float(score),
+        "final_max": 10.0,
+    }
+
+
 def _category_payload(con, category, lat, lon, radius, topn, score):
     if category == "market":
         frame, _market_score, count, nearest = analyze_market(
             con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
+        score_breakdown = _market_score_breakdown(con, lat, lon, score)
     else:
         frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0
         nearest = float(frame.iloc[0]["d_min"]) if not frame.empty else None
+        score_breakdown = None
     items = []
     for _, row in frame.iterrows():
         poi_type = next((_value(row.get(column)) for column in
@@ -213,12 +238,14 @@ def _category_payload(con, category, lat, lon, radius, topn, score):
             "brand": _value(row["brand"]),
             "type": poi_type,
             "lat": float(row["lat"]), "lon": float(row["lon"]),
+            "straight_m": int(round(row["d_lin"])),
             "walk_m": int(round(row["walk_m"])), "walk_min": int(round(row["walk_s"] / 60)),
             "drive_m": int(round(row["drive_m"])), "drive_min": int(round(row["drive_s"] / 60)),
         })
     return {"key": category, "score": score, "count": count,
             "nearest_m": int(round(nearest)) if nearest is not None else None,
             "has_hospital": bool(frame.iloc[0]["has_hospital_any"]) if category == "health" and not frame.empty else None,
+            "score_breakdown": score_breakdown,
             "items": items}
 
 

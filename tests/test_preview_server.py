@@ -87,7 +87,25 @@ class AddressSuggestionsApiTests(unittest.TestCase):
 
 
 class RadiusReanalysisApiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.demo_dir, cls.demo_nodes, cls.demo_polys = server._create_demo_caches()
+        cls.patches = [
+            patch.object(server, "NODES_PATH", cls.demo_nodes),
+            patch.object(server, "POLYS_PATH", cls.demo_polys),
+            patch.object(server, "DATA_MODE", "demo"),
+        ]
+        for active_patch in cls.patches:
+            active_patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        for active_patch in reversed(cls.patches):
+            active_patch.stop()
+        cls.demo_dir.cleanup()
+
     def setUp(self):
+        server._result_cache.clear()
         self.client = server.app.test_client()
 
     def analyze(self, radius):
@@ -117,6 +135,25 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         self.assertTrue(all("Demo Marketplace" not in
                             [item["name"] for item in market["items"]]
                             for market in markets))
+        self.assertTrue(all(
+            {"straight_m", "walk_m", "walk_min", "drive_m", "drive_min"}
+            <= set(item)
+            for market in markets for item in market["items"]
+        ))
+
+    def test_market_breakdown_describes_existing_score(self):
+        market = next(cat for cat in self.analyze(2500)["categories"]
+                      if cat["key"] == "market")
+        breakdown = market["score_breakdown"]
+
+        self.assertEqual(breakdown["proximity_max"], 7.0)
+        self.assertEqual(breakdown["choice_max"], 3.0)
+        self.assertEqual(breakdown["effective_count_saturation"], 3.0)
+        self.assertAlmostEqual(
+            breakdown["proximity_points"] + breakdown["choice_points"],
+            market["score"],
+        )
+        self.assertEqual(breakdown["final_score"], market["score"])
 
 
 if __name__ == "__main__":
