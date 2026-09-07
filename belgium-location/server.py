@@ -1,0 +1,318 @@
+"""Local-only Flask preview for the current analysis implementation."""
+
+import atexit
+import math
+import os
+from pathlib import Path
+import tempfile
+import threading
+import time
+
+import duckdb
+from flask import Flask, jsonify, request, send_from_directory
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import requests
+
+from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
+                        analyze_market, geocode, query_category)
+
+
+BASE_DIR = Path(__file__).resolve().parent
+DEMO_LAT, DEMO_LON = 50.876182, 4.680335
+SUPPORTED_LANGS = ("tr", "en", "nl")
+LABELS = {
+    "tr": {"school": "Okul", "market": "Market", "health": "Sağlık", "transit": "Ulaşım", "park": "Park", "sport": "Spor"},
+    "en": {"school": "School", "market": "Groceries", "health": "Health", "transit": "Transit", "park": "Park", "sport": "Sports"},
+    "nl": {"school": "School", "market": "Supermarkt", "health": "Gezondheid", "transit": "Openbaar vervoer", "park": "Park", "sport": "Sport"},
+}
+DEMO_NOTICES = {
+    "tr": "DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.",
+    "en": "DEMO DATA — results are synthetic and only for interface testing.",
+    "nl": "DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.",
+}
+AUTOCOMPLETE_UNAVAILABLE = {
+    "tr": "Adres önerileri kullanılamıyor. Adresi yazıp analiz edebilir veya koordinat girebilirsiniz.",
+    "en": "Address suggestions are unavailable. You can still type an address or enter coordinates.",
+    "nl": "Adressuggesties zijn niet beschikbaar. U kunt nog steeds een adres typen of coördinaten invoeren.",
+}
+
+
+class AddressSuggestionProvider:
+    """Small provider boundary so autocomplete can be replaced or tested independently."""
+
+    def suggest(self, query, lang, limit=6):
+        raise NotImplementedError
+
+
+class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
+    ENDPOINT = "https://api.geoapify.com/v1/geocode/autocomplete"
+
+    def __init__(self, api_key, http_get=requests.get):
+        self.api_key = api_key
+        self.http_get = http_get
+
+    def suggest(self, query, lang, limit=6):
+        response = self.http_get(
+            self.ENDPOINT,
+            params={
+                "text": query,
+                "apiKey": self.api_key,
+                "filter": "countrycode:be",
+                "lang": lang,
+                "limit": min(int(limit), 6),
+                "format": "json",
+            },
+            timeout=6,
+        )
+        response.raise_for_status()
+        suggestions = []
+        for item in response.json().get("results", []):
+            try:
+                label = str(item.get("formatted") or item.get("address_line1") or "").strip()
+                lat, lon = float(item["lat"]), float(item["lon"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not label:
+                continue
+            suggestions.append({
+                "label": label,
+                "lat": lat,
+                "lon": lon,
+                "result_type": str(item.get("result_type") or "unknown"),
+            })
+            if len(suggestions) >= limit:
+                break
+        return suggestions
+
+
+_geoapify_key = os.environ.get("GEOAPIFY_API_KEY", "").strip()
+ADDRESS_PROVIDER = GeoapifyAddressSuggestionProvider(_geoapify_key) if _geoapify_key else None
+
+
+def _existing_cache(env_name, filename):
+    configured = os.environ.get(env_name)
+    candidates = ([Path(configured)] if configured else []) + [
+        BASE_DIR / "cache" / filename,
+        BASE_DIR.parent / "cache" / filename,
+    ]
+    return next((str(path.resolve()) for path in candidates if path.is_file()), None)
+
+
+def _offset(distance_m, bearing_degrees):
+    angle = math.radians(bearing_degrees)
+    north = distance_m * math.cos(angle)
+    east = distance_m * math.sin(angle)
+    lat = DEMO_LAT + math.degrees(north / 6371000.0)
+    lon = DEMO_LON + math.degrees(east / (6371000.0 * math.cos(math.radians(DEMO_LAT))))
+    return lat, lon
+
+
+NODE_SCHEMA = pa.schema([
+    ("id", pa.int64()), ("cat", pa.string()), ("name", pa.string()),
+    ("lat", pa.float64()), ("lon", pa.float64()),
+    ("amenity", pa.string()), ("shop", pa.string()), ("healthcare", pa.string()),
+    ("railway", pa.string()), ("highway", pa.string()), ("public_transport", pa.string()),
+    ("leisure", pa.string()), ("boundary", pa.string()), ("landuse", pa.string()),
+    ("sport", pa.string()), ("school_level", pa.string()), ("isced_level", pa.string()),
+])
+POLY_SCHEMA = pa.schema([
+    ("uid", pa.string()), ("cat", pa.string()), ("name", pa.string()), ("brand", pa.string()),
+    ("lat", pa.float64()), ("lon", pa.float64()),
+    ("amenity", pa.string()), ("shop", pa.string()), ("healthcare", pa.string()),
+    ("railway", pa.string()), ("highway", pa.string()), ("public_transport", pa.string()),
+    ("leisure", pa.string()), ("boundary", pa.string()), ("landuse", pa.string()),
+    ("sport", pa.string()), ("school_level", pa.string()), ("isced_level", pa.string()),
+])
+
+
+def _node(identifier, category, name, distance, bearing, **tags):
+    lat, lon = _offset(distance, bearing)
+    row = {name: None for name in NODE_SCHEMA.names}
+    row.update({"id": identifier, "cat": category, "name": name, "lat": lat, "lon": lon})
+    row.update(tags)
+    return row
+
+
+def _poly(identifier, category, name, distance, bearing, brand=None, **tags):
+    lat, lon = _offset(distance, bearing)
+    row = {name: None for name in POLY_SCHEMA.names}
+    row.update({"uid": identifier, "cat": category, "name": name, "brand": brand,
+                "lat": lat, "lon": lon})
+    row.update(tags)
+    return row
+
+
+def _create_demo_caches():
+    temp_dir = tempfile.TemporaryDirectory(prefix="ev-analizi-preview-")
+    target = Path(temp_dir.name)
+    nodes_path, polys_path = target / "nodes.parquet", target / "polys.parquet"
+    nodes = [
+        _node(1, "market", "Delhaize Demo", 300, 20, shop="supermarket"),
+        _node(2, "market", "Carrefour Express Demo", 100, 120, shop="convenience"),
+        _node(3, "market", "Colruyt Demo", 520, 220, shop="supermarket"),
+        _node(4, "market", "Night Shop Demo", 1800, 300, shop="convenience"),
+        _node(5, "market", "Demo Marketplace", 80, 45, amenity="marketplace"),
+        _node(6, "school", "Heverlee Demo School", 420, 55, amenity="school"),
+        _node(7, "school", "Demo Kindergarten", 900, 160, amenity="kindergarten"),
+        _node(8, "health", "Demo Pharmacy", 480, 260, amenity="pharmacy"),
+        _node(9, "transit", "Demo Bus Stop", 180, 350, highway="bus_stop"),
+        _node(10, "transit", "Demo Station", 760, 80, railway="station"),
+        _node(11, "sport", "Demo Fitness", 700, 190, leisure="fitness_centre"),
+    ]
+    polygons = [
+        _poly("p1", "market", "colruyt demo", 545, 220, brand="Colruyt",
+              shop="supermarket"),
+        _poly("p2", "health", "Demo Medical Centre", 1100, 135,
+              amenity="hospital"),
+        _poly("p3", "park", "Demo Neighbourhood Park", 600, 10,
+              leisure="park"),
+        _poly("p4", "sport", "Demo Sports Centre", 1300, 240,
+              leisure="sports_centre"),
+    ]
+    pq.write_table(pa.Table.from_pylist(nodes, schema=NODE_SCHEMA), nodes_path)
+    pq.write_table(pa.Table.from_pylist(polygons, schema=POLY_SCHEMA), polys_path)
+    return temp_dir, str(nodes_path), str(polys_path)
+
+
+NODES_PATH = _existing_cache("POI_NODES", "be_poi.parquet")
+POLYS_PATH = _existing_cache("POI_POLYS", "be_poi_poly.parquet")
+DATA_MODE = "real" if (NODES_PATH or POLYS_PATH) else "demo"
+_demo_dir = None
+if DATA_MODE == "demo":
+    _demo_dir, NODES_PATH, POLYS_PATH = _create_demo_caches()
+    atexit.register(_demo_dir.cleanup)
+
+
+app = Flask(__name__, static_folder="static", static_url_path="")
+_result_cache = {}
+_cache_lock = threading.Lock()
+
+
+def _value(value):
+    return None if pd.isnull(value) else value
+
+
+def _category_payload(con, category, lat, lon, radius, topn, score):
+    if category == "market":
+        frame, _market_score, count, nearest = analyze_market(
+            con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
+    else:
+        frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
+        count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0
+        nearest = float(frame.iloc[0]["d_min"]) if not frame.empty else None
+    items = []
+    for _, row in frame.iterrows():
+        poi_type = next((_value(row.get(column)) for column in
+                         ("shop", "amenity", "healthcare", "railway", "highway",
+                          "public_transport", "leisure", "sport")
+                         if _value(row.get(column))), None)
+        items.append({
+            "name": _value(row["name"]) or _value(row["brand"]) or "Unnamed",
+            "brand": _value(row["brand"]),
+            "type": poi_type,
+            "lat": float(row["lat"]), "lon": float(row["lon"]),
+            "walk_m": int(round(row["walk_m"])), "walk_min": int(round(row["walk_s"] / 60)),
+            "drive_m": int(round(row["drive_m"])), "drive_min": int(round(row["drive_s"] / 60)),
+        })
+    return {"key": category, "score": score, "count": count,
+            "nearest_m": int(round(nearest)) if nearest is not None else None,
+            "has_hospital": bool(frame.iloc[0]["has_hospital_any"]) if category == "health" and not frame.empty else None,
+            "items": items}
+
+
+def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
+    key = (round(lat, 6), round(lon, 6), display_address, radius, topn, lang, DATA_MODE)
+    with _cache_lock:
+        cached = _result_cache.get(key)
+    if cached:
+        return cached
+
+    result = analyze_location(lat=lat, lon=lon, radius=radius, topn=topn,
+                              nodes_path=NODES_PATH, polys_path=POLYS_PATH)
+    with duckdb.connect() as con:
+        categories = [
+            _category_payload(con, category, lat, lon, radius, topn,
+                              result["scores"][CATS[category]["label"]])
+            for category in CATS
+        ]
+    payload = {"display_address": display_address, "lat": lat, "lon": lon,
+               "radius": radius, "lang": lang, "overall": result["overall"],
+               "categories": categories, "data_mode": DATA_MODE,
+               "data_notice": DEMO_NOTICES[lang] if DATA_MODE == "demo" else None}
+    with _cache_lock:
+        _result_cache[key] = payload
+    return payload
+
+
+@app.get("/api/health")
+def health():
+    return jsonify({"status": "ok", "data_mode": DATA_MODE,
+                    "cache": {"nodes": NODES_PATH, "polys": POLYS_PATH}})
+
+
+@app.get("/api/address-suggestions")
+def address_suggestions_api():
+    lang = str(request.args.get("lang", "en")).lower()
+    if lang not in SUPPORTED_LANGS:
+        return jsonify({"error": "Unsupported language."}), 400
+    query = str(request.args.get("q", "")).strip()
+    if len(query) < 3:
+        return jsonify({"available": ADDRESS_PROVIDER is not None, "suggestions": []})
+    if ADDRESS_PROVIDER is None:
+        return jsonify({"available": False, "suggestions": [],
+                        "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
+    try:
+        suggestions = ADDRESS_PROVIDER.suggest(query, lang, limit=6)
+    except (requests.RequestException, ValueError, TypeError):
+        return jsonify({"available": True, "suggestions": [],
+                        "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
+    return jsonify({"available": True, "suggestions": suggestions})
+
+
+@app.post("/api/analyze")
+def analyze_api():
+    body = request.get_json(silent=True) or {}
+    lang = str(body.get("lang", "tr")).lower()
+    if lang not in SUPPORTED_LANGS:
+        return jsonify({"error": "Unsupported language."}), 400
+    try:
+        radius = int(body.get("radius", DEFAULT_RADIUS_M))
+        topn = int(body.get("topn", TOP_N))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid radius or topn."}), 400
+    if radius not in (1000, 2500, 5000) or not (1 <= topn <= 20):
+        return jsonify({"error": "Preview radius/topn is out of range."}), 400
+
+    address = str(body.get("address") or "").strip()
+    if body.get("lat") is not None and body.get("lon") is not None:
+        try:
+            lat, lon = float(body["lat"]), float(body["lon"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid coordinates."}), 400
+        display_address = address or f"({lat:.6f}, {lon:.6f})"
+    elif address:
+        if DATA_MODE == "demo":
+            lat, lon, display_address = DEMO_LAT, DEMO_LON, f"{address} — DEMO"
+        else:
+            try:
+                lat, lon, display_address = geocode(address)
+            except Exception:
+                return jsonify({"error": "Address could not be geocoded."}), 400
+    else:
+        return jsonify({"error": "Provide an address or coordinates."}), 400
+
+    return jsonify(_run_preview_analysis(lat, lon, display_address, radius, topn, lang))
+
+
+@app.get("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+
+if __name__ == "__main__":
+    print(f"[preview] data mode: {DATA_MODE}")
+    print(f"[preview] nodes: {NODES_PATH}")
+    print(f"[preview] polygons: {POLYS_PATH}")
+    app.run(host="127.0.0.1", port=5000, debug=False)

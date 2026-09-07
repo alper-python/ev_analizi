@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+    <helmet>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+              rel="stylesheet">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+            :root {
+                --bg: #f6f5f2;
+                --surface: #ffffff;
+                --ink: #1c2430;
+                --muted: #66707e;
+                --line: rgba(20, 30, 48, .1);
+                --chip: #ecebe6;
+                --shadow: 0 1px 3px rgba(20, 30, 48, .06), 0 8px 24px rgba(20, 30, 48, .05)
+            }
+
+            body {
+                margin: 0;
+                overflow-x: hidden;
+                background: var(--bg);
+                color: var(--ink);
+                font-family: Manrope, system-ui, sans-serif
+            }
+
+            a {
+                color: #2E6FDB
+            }
+
+            a:hover {
+                color: #1e56b8
+            }
+
+            @keyframes shimmer {
+                0% {
+                    background-position: -600px 0
+                }
+                100% {
+                    background-position: 600px 0
+                }
+            }
+
+            @keyframes pulse {
+                0%, 100% {
+                    opacity: .45
+                }
+                50% {
+                    opacity: 1
+                }
+            }
+
+            .leaflet-container {
+                font-family: Manrope, system-ui, sans-serif
+            }
+
+            .leaflet-popup-content-wrapper {
+                border-radius: 12px
+            }
+
+            .leaflet-popup-content {
+                font: 500 12.5px/1.5 Manrope, system-ui, sans-serif;
+                margin: 12px 16px
+            }
+
+            .suggestions-menu {
+                position: absolute;
+                top: calc(100% + 6px);
+                left: 0;
+                right: 0;
+                z-index: 1300;
+                overflow: hidden;
+                border: 1px solid var(--line);
+                border-radius: 11px;
+                background: var(--surface);
+                box-shadow: var(--shadow)
+            }
+
+            .analysis-layout { min-width: 0; align-items: flex-start !important }
+            .results-panel { min-width: 0; overflow: visible !important }
+            .results-panel > * { flex: 0 0 auto }
+            .category-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                gap: 12px;
+                min-width: 0;
+                align-items: start
+            }
+            .category-grid > * { min-width: 0 }
+
+            @media (max-width: 1199px) {
+                .analysis-layout {
+                    flex-direction: column;
+                    gap: 14px;
+                    padding: 14px;
+                    box-sizing: border-box
+                }
+                .analysis-layout > div:first-child {
+                    border-radius: 14px;
+                    overflow: hidden
+                }
+                .results-panel {
+                    padding: 0 !important;
+                    border: none !important
+                }
+            }
+
+            @media (min-width: 700px) and (max-width: 1199px) {
+                .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+            }
+
+            @media (max-width: 520px) {
+                .poi-row { align-items: flex-start !important; flex-direction: column }
+                .poi-drive { text-align: left !important }
+            }
+        </style>
+    </helmet>
+    <div style="{{ rootStyle}}">
+
+        <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+            <div data-screen-label="Arama ekranı"
+                 style="min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--ink)">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 20px;max-width:1060px;width:100%;margin:0 auto;box-sizing:border-box">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <div style="width:34px;height:34px;border-radius:10px;background:#2E6FDB;display:grid;place-items:center;flex:none">
+                            {{ logoIcon }}
+                        </div>
+                        <div style="font-weight:800;font-size:16px;letter-spacing:-0.01em">{{ t.brand }}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <div style="display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px;gap:2px">
+                            <sc-for list="{{ langOpts }}" as="l" hint-placeholder-count="3">
+                                <button onClick="{{ l.pick }}" style="{{ l.style }}">{{ l.label }}</button>
+                            </sc-for>
+                        </div>
+                        <button onClick="{{ toggleTheme }}"
+                                style="display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;font:600 12.5px Manrope">
+                            {{ themeIcon }}{{ themeLabel }}
+                        </button>
+                    </div>
+                </div>
+                <div style="max-width:720px;width:100%;margin:0 auto;padding:36px 20px 0;box-sizing:border-box;flex:1">
+                    <h1 style="font-size:clamp(29px,4.6vw,44px);font-weight:800;letter-spacing:-0.02em;line-height:1.08;margin:0 0 14px;text-align:center;text-wrap:balance">
+                        {{ t.h1 }}</h1>
+                    <p style="margin:0 auto 30px;max-width:540px;text-align:center;color:var(--muted);font:500 15.5px/1.6 Manrope;text-wrap:pretty">
+                        {{ t.sub }}</p>
+                    <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px">
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
+                            <div style="flex:1 1 280px;min-width:0;position:relative">
+                                <input ref="{{ addrRef }}" onInput="{{ onAddrInput }}" onKeyDown="{{ onAddrKey }}" placeholder="{{ t.placeholder }}"
+                                       autocomplete="off" aria-autocomplete="list" aria-expanded="{{ suggestionsOpen }}"
+                                       style="width:100%;padding:14px 16px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 15px Manrope;outline-color:#2E6FDB;min-width:0;min-height:44px;box-sizing:border-box">
+                                <sc-if value="{{ showSuggestionPanel }}" hint-placeholder-val="{{ false }}">
+                                    <div class="suggestions-menu" role="listbox">
+                                        <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="4">
+                                            <button onMouseDown="{{ s.pick }}" style="{{ s.style }}" role="option">
+                                                <span style="font:700 12.5px/1.35 Manrope">{{ s.label }}</span>
+                                                <span style="font:600 10.5px Manrope;color:var(--muted)">{{ s.resultType }}</span>
+                                            </button>
+                                        </sc-for>
+                                        <sc-if value="{{ suggestionMessage }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:11px 13px;font:600 11.5px/1.45 Manrope;color:var(--muted)">{{ suggestionMessage }}</div>
+                                        </sc-if>
+                                    </div>
+                                </sc-if>
+                            </div>
+                            <button onClick="{{ onSearch }}"
+                                    style="flex:1 0 auto;padding:14px 24px;min-height:44px;border-radius:11px;border:none;background:#2E6FDB;color:#fff;font:700 15px Manrope;cursor:pointer"
+                                    style-hover="background:#1e56b8">{{ t.analyze }}
+                            </button>
+                        </div>
+                        <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}">
+                            <div style="color:#D64545;font:600 12.5px Manrope;margin-top:9px">{{ formError }}</div>
+                        </sc-if>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px">
+                            <span style="font:700 12px Manrope;color:var(--muted)">{{ t.radius }}</span>
+                            <sc-for list="{{ radiusOpts }}" as="opt" hint-placeholder-count="3">
+                                <button onClick="{{ opt.pick }}" style="{{ opt.style }}">{{ opt.label }}</button>
+                            </sc-for>
+                        </div>
+                        <details style="margin-top:14px">
+                            <summary style="cursor:pointer;font:600 12.5px Manrope;color:var(--muted);min-height:24px">
+                                {{ t.advanced }}
+                            </summary>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+                                <input ref="{{ latRef }}" placeholder="{{ t.latPh }}"
+                                       style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
+                                <input ref="{{ lonRef }}" placeholder="{{ t.lonPh }}"
+                                       style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
+                                <button onClick="{{ onCoordSearch }}"
+                                        style="padding:11px 18px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 13px Manrope;cursor:pointer"
+                                        style-hover="background:var(--chip)">{{ t.searchBtn }}
+                                </button>
+                            </div>
+                        </details>
+                    </div>
+                    <sc-if value="{{ hasRecent }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;justify-content:center">
+                            <span style="font:700 12px Manrope;color:var(--muted)">{{ t.recent }}</span>
+                            <sc-for list="{{ recent }}" as="r" hint-placeholder-count="2">
+                                <button onClick="{{ r.pick }}"
+                                        style="padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 12px Manrope;cursor:pointer;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                                        style-hover="background:var(--chip)">{{ r.label }}
+                                </button>
+                            </sc-for>
+                        </div>
+                    </sc-if>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:38px">
+                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:9px">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(46,111,219,.12);display:grid;place-items:center">
+                                {{ vpIcon1 }}
+                            </div>
+                            <div style="font:800 14px Manrope">{{ t.vp1t }}</div>
+                            <div style="font:500 12.5px/1.55 Manrope;color:var(--muted);text-wrap:pretty">{{ t.vp1d }}
+                            </div>
+                        </div>
+                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:9px">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(124,77,190,.12);display:grid;place-items:center">
+                                {{ vpIcon2 }}
+                            </div>
+                            <div style="font:800 14px Manrope">{{ t.vp2t }}</div>
+                            <div style="font:500 12.5px/1.55 Manrope;color:var(--muted);text-wrap:pretty">{{ t.vp2d }}
+                            </div>
+                        </div>
+                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:9px">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(62,155,79,.12);display:grid;place-items:center">
+                                {{ vpIcon3 }}
+                            </div>
+                            <div style="font:800 14px Manrope">{{ t.vp3t }}</div>
+                            <div style="font:500 12.5px/1.55 Manrope;color:var(--muted);text-wrap:pretty">{{ t.vp3d }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align:center;padding:26px 20px;color:var(--muted);font:500 12px Manrope">{{ t.footer }}
+                    · <a href="#" onClick="{{ openStyle }}">{{ t.styleGuide }}</a></div>
+            </div>
+        </sc-if>
+
+        <sc-if value="{{ isAnalysis }}" hint-placeholder-val="{{ false }}">
+            <div data-screen-label="Analiz sonucu"
+                 style="min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--ink)">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:1100">
+                    <button onClick="{{ goHome }}"
+                            style="flex:none;padding:9px 14px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12.5px Manrope;cursor:pointer"
+                            style-hover="background:var(--chip)">{{ t.newSearch }}
+                    </button>
+                    <div style="min-width:140px;flex:1">
+                        <div style="font:800 14px Manrope;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{
+                            displayAddress }}
+                        </div>
+                        <div style="font:600 11.5px Manrope;color:var(--muted)">{{ metaLine }}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+                            <button onClick="{{ onPrint }}"
+                                    style="flex:none;padding:9px 14px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12.5px Manrope;cursor:pointer"
+                                    style-hover="background:var(--chip)">{{ t.print }}
+                            </button>
+                        </sc-if>
+                        <div style="display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px;gap:2px">
+                            <sc-for list="{{ langOpts }}" as="l" hint-placeholder-count="3">
+                                <button onClick="{{ l.pick }}" style="{{ l.style }}">{{ l.label }}</button>
+                            </sc-for>
+                        </div>
+                        <button onClick="{{ toggleTheme }}"
+                                style="flex:none;display:inline-flex;align-items:center;padding:9px 12px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer">
+                            {{ themeIcon }}
+                        </button>
+                    </div>
+                </div>
+
+                <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+                    <div style="flex:1;display:grid;place-items:center;padding:28px 18px">
+                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:30px 26px;max-width:440px;text-align:center">
+                            <div style="width:52px;height:52px;border-radius:50%;background:rgba(214,69,69,.12);color:#D64545;display:grid;place-items:center;font:800 24px Manrope;margin:0 auto 16px">
+                                !
+                            </div>
+                            <div style="font:800 18px Manrope;margin-bottom:8px">{{ errorTitle }}</div>
+                            <div style="font:500 13.5px/1.6 Manrope;color:var(--muted);text-wrap:pretty;margin-bottom:20px">
+                                {{ errorDesc }}
+                            </div>
+                            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+                                <sc-if value="{{ errIsEmpty }}" hint-placeholder-val="{{ false }}">
+                                    <button onClick="{{ retryBigger }}"
+                                            style="padding:12px 18px;min-height:44px;border-radius:10px;border:none;background:#2E6FDB;color:#fff;font:700 13px Manrope;cursor:pointer"
+                                            style-hover="background:#1e56b8">{{ t.btnBigger }}
+                                    </button>
+                                </sc-if>
+                                <sc-if value="{{ errIsNotEmpty }}" hint-placeholder-val="{{ false }}">
+                                    <button onClick="{{ retry }}"
+                                            style="padding:12px 18px;min-height:44px;border-radius:10px;border:none;background:#2E6FDB;color:#fff;font:700 13px Manrope;cursor:pointer"
+                                            style-hover="background:#1e56b8">{{ t.btnRetry }}
+                                    </button>
+                                </sc-if>
+                                <button onClick="{{ goHome }}"
+                                        style="padding:12px 18px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 13px Manrope;cursor:pointer"
+                                        style-hover="background:var(--chip)">{{ t.btnEdit }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </sc-if>
+
+                <sc-if value="{{ notError }}" hint-placeholder-val="{{ false }}">
+                    <div class="analysis-layout" style="display:flex;flex-wrap:wrap;align-items:stretch;flex:1">
+                        <div style="{{ mapBoxStyle }}">
+                            <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+                                <div ref="{{ setMapEl }}" style="position:absolute;inset:0"></div>
+                                <div style="position:absolute;top:12px;left:12px;right:52px;z-index:900;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none">
+                                    <sc-for list="{{ cats }}" as="cat" hint-placeholder-count="6">
+                                        <button onClick="{{ cat.toggleFilter }}" style="{{ cat.chipStyle }}">{{
+                                            cat.label }} · {{ cat.count }}
+                                        </button>
+                                    </sc-for>
+                                </div>
+                            </sc-if>
+                            <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+                                <div style="position:absolute;inset:0;background:linear-gradient(100deg,var(--chip) 30%,var(--surface) 50%,var(--chip) 70%);background-size:1200px 100%;animation:shimmer 1.6s linear infinite"></div>
+                                <div style="position:absolute;inset:0;display:grid;place-items:center">
+                                    <div style="animation:pulse 1.7s ease-in-out infinite;font:700 14.5px Manrope;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:12px 22px;box-shadow:var(--shadow)">
+                                        {{ t.analyzing }}
+                                    </div>
+                                </div>
+                            </sc-if>
+                        </div>
+
+                        <div class="results-panel" style="{{ panelStyle }}">
+                            <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+                                <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;gap:18px;align-items:center">
+                                    <div style="width:92px;height:92px;border-radius:50%;flex:none;background:linear-gradient(100deg,var(--chip) 30%,var(--bg) 50%,var(--chip) 70%);background-size:600px 100%;animation:shimmer 1.6s linear infinite"></div>
+                                    <div style="flex:1;display:flex;flex-direction:column;gap:9px">
+                                        <div style="height:15px;width:60%;border-radius:6px;background:var(--chip);animation:pulse 1.7s ease-in-out infinite"></div>
+                                        <div style="height:11px;width:85%;border-radius:6px;background:var(--chip);animation:pulse 1.7s ease-in-out infinite"></div>
+                                        <div style="height:11px;width:45%;border-radius:6px;background:var(--chip);animation:pulse 1.7s ease-in-out infinite"></div>
+                                    </div>
+                                </div>
+                                <sc-for list="{{ skeletons }}" as="s" hint-placeholder-count="6">
+                                    <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px;display:flex;gap:12px;align-items:center">
+                                        <div style="width:36px;height:36px;border-radius:10px;flex:none;background:var(--chip);animation:pulse 1.7s ease-in-out infinite"></div>
+                                        <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+                                            <div style="height:12px;width:40%;border-radius:6px;background:var(--chip);animation:pulse 1.7s ease-in-out infinite"></div>
+                                            <div style="height:6px;width:100%;border-radius:3px;background:var(--chip);animation:pulse 1.7s ease-in-out infinite"></div>
+                                        </div>
+                                    </div>
+                                </sc-for>
+                            </sc-if>
+
+                            <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+                                <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+                                    <div style="{{ gaugeStyle }}">
+                                        <div style="width:72px;height:72px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center">
+                                            <div style="font:800 27px/1 Manrope;letter-spacing:-0.02em">{{ overallStr
+                                                }}
+                                            </div>
+                                            <div style="font:700 10.5px Manrope;color:var(--muted)">/ 10</div>
+                                        </div>
+                                    </div>
+                                    <div style="flex:1;min-width:180px">
+                                        <div style="font:800 17px Manrope;margin-bottom:4px">{{ t.overall }}</div>
+                                        <div style="font:600 13.5px/1.5 Manrope;text-wrap:pretty;margin-bottom:6px;color:{{ overallColor }}">
+                                            {{ overallComment }}
+                                        </div>
+                                        <div style="font:600 12px Manrope;color:var(--muted)">{{ radiusLine }}</div>
+                                        <sc-if value="{{ dataNotice }}" hint-placeholder-val="{{ false }}">
+                                            <div style="margin-top:8px;padding:7px 10px;border-radius:8px;background:rgba(232,132,44,.12);color:#b96116;font:700 11.5px/1.4 Manrope">
+                                                {{ dataNotice }}
+                                            </div>
+                                        </sc-if>
+                                    </div>
+                                </div>
+
+                                <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                    <span style="font:700 12px Manrope;color:var(--muted)">{{ t.displayRadius }}</span>
+                                    <sc-for list="{{ resultRadiusOpts }}" as="opt" hint-placeholder-count="3">
+                                        <button onClick="{{ opt.pick }}" style="{{ opt.style }}">{{ opt.label }}</button>
+                                    </sc-for>
+                                    <sc-if value="{{ isRefreshing }}" hint-placeholder-val="{{ false }}">
+                                        <span style="font:700 11.5px Manrope;color:#2E6FDB;animation:pulse 1.2s ease-in-out infinite">{{ t.refreshing }}</span>
+                                    </sc-if>
+                                </div>
+
+                                <div class="category-grid">
+                                    <sc-for list="{{ cats }}" as="cat" hint-placeholder-count="6">
+                                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden">
+                                        <button onClick="{{ cat.toggle }}"
+                                                style="display:flex;width:100%;box-sizing:border-box;align-items:center;gap:12px;padding:14px 16px;min-height:44px;cursor:pointer;background:none;border:none;color:inherit;font-family:inherit;text-align:left">
+                                            <div style="{{ cat.iconBubbleStyle }}">{{ cat.icon }}</div>
+                                            <div style="flex:1;min-width:0">
+                                                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+                                                    <div style="font:700 14.5px Manrope">{{ cat.label }}</div>
+                                                    <div style="flex:none"><span style="{{ cat.scoreStyle }}">{{ cat.scoreStr }}</span><span
+                                                            style="font:700 11px Manrope;color:var(--muted)"> /10</span>
+                                                    </div>
+                                                </div>
+                                                <div style="height:6px;border-radius:3px;background:var(--chip);margin:7px 0 7px;overflow:hidden">
+                                                    <div style="{{ cat.barStyle }}"></div>
+                                                </div>
+                                                <div style="display:flex;gap:8px;align-items:center;font:600 12px Manrope;color:var(--muted);flex-wrap:wrap">
+                                                    <span>{{ cat.countStr }}</span><span>·</span><span>{{ cat.nearestStr }}</span>
+                                                    <sc-if value="{{ cat.badge }}" hint-placeholder-val="{{ false }}">
+                                                        <span style="{{ cat.badgeStyle }}">{{ cat.badge }}</span>
+                                                    </sc-if>
+                                                </div>
+                                            </div>
+                                            <div style="{{ cat.chevStyle }}">›</div>
+                                        </button>
+                                        <sc-if value="{{ cat.isMarket }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:0 16px 11px 66px">
+                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.marketHow }}</button>
+                                                <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="margin-top:7px;padding:9px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">{{ cat.marketNote }}</div>
+                                                </sc-if>
+                                            </div>
+                                        </sc-if>
+                                        <sc-if value="{{ cat.isOpen }}" hint-placeholder-val="{{ false }}">
+                                            <div style="border-top:1px solid var(--line)">
+                                                <sc-if value="{{ cat.limitNote }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="padding:9px 16px;border-bottom:1px solid var(--line);font:700 11px Manrope;color:var(--muted)">{{ cat.limitNote }}</div>
+                                                </sc-if>
+                                                <sc-for list="{{ cat.rows }}" as="row" hint-placeholder-count="5">
+                                                    <div onMouseEnter="{{ row.enter }}" onMouseLeave="{{ row.leave }}"
+                                                         class="poi-row"
+                                                         style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 16px;min-height:44px;box-sizing:border-box;border-bottom:1px solid var(--line)"
+                                                         style-hover="background:var(--chip)">
+                                                        <div style="min-width:0">
+                                                            <div style="font:700 13px Manrope;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                                                                {{ row.name }}
+                                                            </div>
+                                                            <sc-if value="{{ row.typeStr }}" hint-placeholder-val="{{ false }}">
+                                                                <div style="font:600 10.5px Manrope;color:var(--muted);text-transform:capitalize">{{ row.typeStr }}</div>
+                                                            </sc-if>
+                                                            <div style="font:600 11.5px Manrope;color:var(--muted)">{{
+                                                                row.walkStr }}
+                                                            </div>
+                                                        </div>
+                                                        <div class="poi-drive" style="flex:none;text-align:right;font:600 11.5px Manrope;color:var(--muted)">
+                                                            {{ row.driveStr }}
+                                                        </div>
+                                                    </div>
+                                                </sc-for>
+                                            </div>
+                                        </sc-if>
+                                        </div>
+                                    </sc-for>
+                                </div>
+
+                                <div style="border:1.5px dashed var(--line);border-radius:14px;padding:16px;text-align:center;font:600 12.5px/1.5 Manrope;color:var(--muted)">
+                                    {{ t.cmp1 }}<br><span style="font-weight:500">{{ t.cmp2 }}</span></div>
+                            </sc-if>
+                        </div>
+                    </div>
+                </sc-if>
+            </div>
+        </sc-if>
+
+        <sc-if value="{{ isStyle }}" hint-placeholder-val="{{ false }}">
+            <div data-screen-label="Stil rehberi"
+                 style="min-height:100vh;background:var(--bg);color:var(--ink);padding:24px 20px 60px;box-sizing:border-box">
+                <div style="max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:28px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                        <div style="font:800 24px Manrope;letter-spacing:-0.02em">{{ t.styleGuide }}</div>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <div style="display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:3px;gap:2px">
+                                <sc-for list="{{ langOpts }}" as="l" hint-placeholder-count="3">
+                                    <button onClick="{{ l.pick }}" style="{{ l.style }}">{{ l.label }}</button>
+                                </sc-for>
+                            </div>
+                            <button onClick="{{ goHome }}"
+                                    style="padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12.5px Manrope;cursor:pointer"
+                                    style-hover="background:var(--chip)">{{ t.sgBack }}
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font:800 14px Manrope;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">
+                            {{ t.sgPalette }}
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">
+                            <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="12">
+                                <div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+                                    <div style="{{ sw.style }}"></div>
+                                    <div style="padding:9px 11px">
+                                        <div style="font:700 12px Manrope">{{ sw.name }}</div>
+                                        <div style="font:600 10.5px ui-monospace,monospace;color:var(--muted)">{{ sw.hex
+                                            }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </sc-for>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font:800 14px Manrope;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">
+                            {{ t.sgType }}
+                        </div>
+                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px">
+                            <div style="font:800 34px/1.1 Manrope;letter-spacing:-0.02em">{{ t.sgH }} / 34 · 800</div>
+                            <div style="font:800 17px Manrope">{{ t.sgCardT }} / 17 · 800</div>
+                            <div style="font:700 14.5px Manrope">{{ t.sgCatT }} / 14.5 · 700</div>
+                            <div style="font:500 13.5px/1.6 Manrope">{{ t.sgBody }} / 13.5 · 500 — {{ t.sub }}</div>
+                            <div style="font:600 12px Manrope;color:var(--muted)">{{ t.sgMeta }} / 12 · 600 · muted
+                            </div>
+                            <div style="font:800 30px/1 Manrope;letter-spacing:-0.02em">7,4 <span
+                                    style="font:700 12px Manrope;color:var(--muted)">{{ t.sgScore }} / 30 · 800</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font:800 14px Manrope;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">
+                            {{ t.sgComponents }}
+                        </div>
+                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                            <button style="padding:12px 20px;border-radius:10px;border:none;background:#2E6FDB;color:#fff;font:700 14px Manrope;cursor:pointer">
+                                {{ t.sgPrimary }}
+                            </button>
+                            <button style="padding:12px 20px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 14px Manrope;cursor:pointer">
+                                {{ t.sgSecondary }}
+                            </button>
+                            <button style="padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 12px Manrope;cursor:pointer">
+                                {{ t.sgChip }}
+                            </button>
+                            <span style="padding:4px 10px;border-radius:999px;background:rgba(62,155,79,.14);color:#3E9B4F;font:700 11px Manrope">{{ t.hospY }}</span>
+                            <span style="padding:4px 10px;border-radius:999px;background:rgba(232,150,59,.16);color:#c07a22;font:700 11px Manrope">{{ t.hospN }}</span>
+                        </div>
+                        <div style="font:500 12px/1.6 Manrope;color:var(--muted);margin-top:10px;text-wrap:pretty">{{
+                            t.sgNote }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </sc-if>
+
+    </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script
+        data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;language&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tr&quot;,&quot;en&quot;,&quot;nl&quot;],&quot;default&quot;:&quot;tr&quot;,&quot;tsType&quot;:&quot;'tr'|'en'|'nl'&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;demoState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;loading&quot;,&quot;results&quot;,&quot;error-notfound&quot;,&quot;error-server&quot;,&quot;error-empty&quot;,&quot;styleguide&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototip — ekran durumu&quot;}}">
+    class Component extends DCLogic {
+      constructor(props) {
+        super(props);
+        this.mapEl = null; this.map = null; this.tiles = null; this.tileTheme = null;
+        this.groups = {}; this.mk = {};
+        let theme = 'light', lang = 'tr';
+        try {
+          theme = localStorage.getItem('eca-theme') || props.theme || 'light';
+          lang = localStorage.getItem('eca-lang') || props.language || 'tr';
+        } catch (e) {}
+        if (!this.T()[lang]) lang = 'tr';
+        this.state = Object.assign({
+          theme, lang, view: 'home', status: 'results', errorKind: null,
+          radius: 2500, address: '', open: null, hidden: {}, formError: '',
+          recent: this.loadRecent(), data: null, refreshing: false,
+          suggestions: [], suggestionMessage: '', suggestionIndex: -1,
+          selectedCoords: null, marketInfoOpen: false,
+          viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
+          isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
+        }, this.demoPatch(props.demoState));
+        this.onResize = () => {
+          const width = window.innerWidth, n = width < 760;
+          if (n !== this.state.isNarrow || width !== this.state.viewportWidth) this.setState({ isNarrow: n, viewportWidth: width });
+          if (this.map) this.map.invalidateSize();
+        };
+      }
+
+      DEF_ADDR() { return 'Tervuursesteenweg 147, 3001 Heverlee'; }
+      COLORS() { return { school: '#2E6FDB', market: '#E8842C', health: '#D64545', transit: '#7C4DBE', park: '#3E9B4F', sport: '#3A8FA3' }; }
+
+      T() {
+        return {
+          tr: {
+            brand: 'Ev Çevresi Analizi', h1: 'Bu adres, yaşamak için ne kadar uygun?',
+            sub: 'Bir adres girin — çevredeki okul, market, sağlık, ulaşım, park ve spor noktalarını bulup 0–10 arası puanlayalım.',
+            placeholder: 'Örn. Tervuursesteenweg 147, 3001 Heverlee', analyze: 'Analiz et', radius: 'Arama yarıçapı',
+            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.8762)', lonPh: 'Boylam (4.6803)', searchBtn: 'Ara',
+            recent: 'Son aramalar:', vp1t: '6 kategori, tek puan',
+            vp1d: 'Okul, market, sağlık, ulaşım, park ve spor ayrı ayrı puanlanır; hepsi tek yaşanabilirlik puanında birleşir.',
+            vp2t: 'Gerçek mesafeler', vp2d: 'Her nokta için yürüme ve araçla mesafe–süre bilgisi, OpenStreetMap verisiyle.',
+            vp3t: 'Haritada keşfet', vp3d: 'Tüm noktaları interaktif haritada kategoriye göre filtreleyerek inceleyin.',
+            footer: 'Veriler © OpenStreetMap katkıda bulunanları', styleGuide: 'Stil rehberi',
+            themeDark: 'Koyu tema', themeLight: 'Açık tema', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
+            analyzing: 'Çevre analiz ediliyor…', overall: 'Genel yaşanabilirlik', radiusWord: 'Yarıçap',
+            points: 'nokta', nearest: 'en yakın:', walk: 'Yürüme', drive: 'Araçla', minU: 'dk',
+            hospY: 'Hastane var', hospN: 'Hastane yok', cmp1: 'Karşılaştırma — yakında', cmp2: '2–3 adresi yan yana kıyaslayın (v2)',
+            searched: 'Aranan adres', btnRetry: 'Tekrar dene', btnBigger: 'Yarıçapı 5 km yap ve tekrar dene', btnEdit: 'Adresi düzenle',
+            formErrAddr: 'Lütfen bir adres girin.', formErrCoord: 'Geçerli bir enlem ve boylam girin.',
+            errNotfoundT: 'Adres bulunamadı', errNotfoundD: 'Adresi posta koduyla birlikte yazmayı deneyin (örn. “Bondgenotenlaan 1, 3000 Leuven”).',
+            errServerT: 'Sunucu hatası', errServerD: 'Analiz servisine şu anda ulaşılamıyor. Birkaç saniye sonra tekrar deneyin.',
+            errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
+            cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
+            marketHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', refreshing: 'Güncelleniyor…',
+            marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
+            suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
+            showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
+            demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
+            comments: ['Günlük yaşam için mükemmel bir konum.', 'Günlük yaşam için çok elverişli konum.', 'Günlük yaşam için makul bir konum; bazı kategoriler zayıf.', 'Konum bazı temel ihtiyaçlarda yetersiz kalıyor.', 'Günlük ihtiyaçlar için elverişsiz bir konum.'],
+            foundLine: (dist, n) => dist + ' yarıçapında ' + n + ' nokta bulundu',
+            sgBack: '← Geri', sgPalette: 'Renk paleti', sgType: 'Tipografi — Manrope', sgComponents: 'Bileşenler',
+            sgH: 'Başlık', sgCardT: 'Kart başlığı', sgCatT: 'Kategori adı', sgBody: 'Gövde metni', sgMeta: 'Meta', sgScore: 'Puan rakamları',
+            sgPrimary: 'Birincil buton', sgSecondary: 'İkincil buton', sgChip: 'Çip',
+            sgNote: 'Köşe yarıçapı: kart 14–16 px, buton 10–11 px, çip 999 px. Gölge: 0 1px 3px + 0 8px 24px, %5–6 opaklık. Puan renkleri: 0–4 kırmızı #D64545, 4–7 amber #E8963B, 7–10 yeşil #3E9B4F.',
+            swNames: ['Arka plan', 'Yüzey', 'Metin', 'İkincil metin', 'Okul', 'Market', 'Sağlık', 'Ulaşım', 'Park', 'Spor', 'Puan · düşük', 'Puan · orta', 'Puan · yüksek']
+          },
+          en: {
+            brand: 'Home Area Analysis', h1: 'How liveable is this address?',
+            sub: 'Enter an address — we find nearby schools, shops, healthcare, transit, parks and sports, and score each from 0–10.',
+            placeholder: 'E.g. Tervuursesteenweg 147, 3001 Heverlee', analyze: 'Analyze', radius: 'Search radius',
+            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.8762)', lonPh: 'Longitude (4.6803)', searchBtn: 'Search',
+            recent: 'Recent searches:', vp1t: '6 categories, one score',
+            vp1d: 'Schools, shops, healthcare, transit, parks and sports are scored separately, then combined into one liveability score.',
+            vp2t: 'Real distances', vp2d: 'Walking and driving distance–time for every place, powered by OpenStreetMap data.',
+            vp3t: 'Explore on the map', vp3d: 'Filter every point by category on an interactive map.',
+            footer: 'Data © OpenStreetMap contributors', styleGuide: 'Style guide',
+            themeDark: 'Dark theme', themeLight: 'Light theme', newSearch: '← New search', print: 'Share / print report',
+            analyzing: 'Analyzing the area…', overall: 'Overall liveability', radiusWord: 'Radius',
+            points: 'places', nearest: 'nearest:', walk: 'Walk', drive: 'Drive', minU: 'min',
+            hospY: 'Hospital nearby', hospN: 'No hospital', cmp1: 'Comparison — coming soon', cmp2: 'Compare 2–3 addresses side by side (v2)',
+            searched: 'Searched address', btnRetry: 'Try again', btnBigger: 'Set radius to 5 km and retry', btnEdit: 'Edit address',
+            formErrAddr: 'Please enter an address.', formErrCoord: 'Enter a valid latitude and longitude.',
+            errNotfoundT: 'Address not found', errNotfoundD: 'Try writing the address with its postal code (e.g. “Bondgenotenlaan 1, 3000 Leuven”).',
+            errServerT: 'Server error', errServerD: 'The analysis service is currently unreachable. Please try again in a few seconds.',
+            errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
+            cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
+            marketHow: 'How is this calculated?', displayRadius: 'Display radius', refreshing: 'Updating…',
+            marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
+            suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
+            showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
+            demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
+            comments: ['An excellent location for daily life.', 'A very convenient location for daily life.', 'A reasonable location; some categories are weak.', 'The location falls short on some essentials.', 'An inconvenient location for daily needs.'],
+            foundLine: (dist, n) => n + ' places found within ' + dist,
+            sgBack: '← Back', sgPalette: 'Color palette', sgType: 'Typography — Manrope', sgComponents: 'Components',
+            sgH: 'Heading', sgCardT: 'Card title', sgCatT: 'Category name', sgBody: 'Body text', sgMeta: 'Meta', sgScore: 'Score digits',
+            sgPrimary: 'Primary button', sgSecondary: 'Secondary button', sgChip: 'Chip',
+            sgNote: 'Corner radius: cards 14–16 px, buttons 10–11 px, chips 999 px. Shadow: 0 1px 3px + 0 8px 24px at 5–6% opacity. Score colors: 0–4 red #D64545, 4–7 amber #E8963B, 7–10 green #3E9B4F.',
+            swNames: ['Background', 'Surface', 'Text', 'Muted text', 'Schools', 'Groceries', 'Health', 'Transit', 'Parks', 'Sports', 'Score · low', 'Score · mid', 'Score · high']
+          },
+          nl: {
+            brand: 'Woonomgeving Analyse', h1: 'Hoe leefbaar is dit adres?',
+            sub: 'Voer een adres in — we vinden scholen, winkels, zorg, vervoer, parken en sport in de buurt en geven elk een score van 0–10.',
+            placeholder: 'Bijv. Tervuursesteenweg 147, 3001 Heverlee', analyze: 'Analyseer', radius: 'Zoekstraal',
+            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.8762)', lonPh: 'Lengtegraad (4.6803)', searchBtn: 'Zoek',
+            recent: 'Recente zoekopdrachten:', vp1t: '6 categorieën, één score',
+            vp1d: 'Scholen, winkels, zorg, vervoer, parken en sport krijgen elk een score, samengevat in één leefbaarheidsscore.',
+            vp2t: 'Echte afstanden', vp2d: 'Loop- en rijafstand met tijd voor elke plek, op basis van OpenStreetMap-data.',
+            vp3t: 'Verken op de kaart', vp3d: 'Filter alle punten per categorie op een interactieve kaart.',
+            footer: 'Data © OpenStreetMap-bijdragers', styleGuide: 'Stijlgids',
+            themeDark: 'Donker thema', themeLight: 'Licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
+            analyzing: 'Omgeving wordt geanalyseerd…', overall: 'Algemene leefbaarheid', radiusWord: 'Straal',
+            points: 'plekken', nearest: 'dichtstbij:', walk: 'Te voet', drive: 'Met de auto', minU: 'min',
+            hospY: 'Ziekenhuis aanwezig', hospN: 'Geen ziekenhuis', cmp1: 'Vergelijking — binnenkort', cmp2: 'Vergelijk 2–3 adressen naast elkaar (v2)',
+            searched: 'Gezocht adres', btnRetry: 'Probeer opnieuw', btnBigger: 'Zet straal op 5 km en probeer opnieuw', btnEdit: 'Adres bewerken',
+            formErrAddr: 'Voer een adres in.', formErrCoord: 'Voer een geldige breedte- en lengtegraad in.',
+            errNotfoundT: 'Adres niet gevonden', errNotfoundD: 'Probeer het adres met postcode te schrijven (bijv. “Bondgenotenlaan 1, 3000 Leuven”).',
+            errServerT: 'Serverfout', errServerD: 'De analysedienst is momenteel niet bereikbaar. Probeer het over enkele seconden opnieuw.',
+            errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
+            cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
+            marketHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', refreshing: 'Bijwerken…',
+            marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
+            suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
+            showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
+            demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
+            comments: ['Een uitstekende locatie voor het dagelijks leven.', 'Een zeer gunstige locatie voor het dagelijks leven.', 'Een redelijke locatie; sommige categorieën zijn zwak.', 'De locatie schiet tekort op enkele basisbehoeften.', 'Een ongunstige locatie voor dagelijkse behoeften.'],
+            foundLine: (dist, n) => n + ' plekken gevonden binnen ' + dist,
+            sgBack: '← Terug', sgPalette: 'Kleurenpalet', sgType: 'Typografie — Manrope', sgComponents: 'Componenten',
+            sgH: 'Kop', sgCardT: 'Karttitel', sgCatT: 'Categorienaam', sgBody: 'Broodtekst', sgMeta: 'Meta', sgScore: 'Scorecijfers',
+            sgPrimary: 'Primaire knop', sgSecondary: 'Secundaire knop', sgChip: 'Chip',
+            sgNote: 'Hoekradius: kaarten 14–16 px, knoppen 10–11 px, chips 999 px. Schaduw: 0 1px 3px + 0 8px 24px op 5–6% dekking. Scorekleuren: 0–4 rood #D64545, 4–7 amber #E8963B, 7–10 groen #3E9B4F.',
+            swNames: ['Achtergrond', 'Oppervlak', 'Tekst', 'Gedempte tekst', 'Scholen', 'Supermarkt', 'Zorg', 'Vervoer', 'Parken', 'Sport', 'Score · laag', 'Score · midden', 'Score · hoog']
+          }
+        };
+      }
+
+      demoPatch(d) {
+        const a = this.DEF_ADDR();
+        switch (d) {
+          case 'loading': return { view: 'analysis', status: 'loading', address: a, data: null };
+          case 'results': return { view: 'analysis', status: 'results', address: a, data: this.buildData(a, 2500) };
+          case 'error-notfound': return { view: 'analysis', status: 'error', errorKind: 'notfound', address: a };
+          case 'error-server': return { view: 'analysis', status: 'error', errorKind: 'server', address: a };
+          case 'error-empty': return { view: 'analysis', status: 'error', errorKind: 'empty', address: a };
+          case 'styleguide': return { view: 'style' };
+          default: return {};
+        }
+      }
+
+      buildData(addr, radius) {
+        return {
+          display_address: addr, lat: 50.876182, lon: 4.680335, radius: radius, overall: 7.4,
+          categories: [
+            { key: 'school', score: 7.8, count: 9, nearest_m: 420, has_hospital: null, items: [
+              { name: 'Heilig Hartcollege', lat: 50.8795, lon: 4.6785, walk_m: 420, walk_min: 6, drive_m: 500, drive_min: 2 },
+              { name: 'GBS De Puzzel Heverlee', lat: 50.8728, lon: 4.6862, walk_m: 700, walk_min: 9, drive_m: 850, drive_min: 3 },
+              { name: 'Sint-Pieterscollege', lat: 50.8825, lon: 4.6920, walk_m: 1300, walk_min: 17, drive_m: 1500, drive_min: 5 },
+              { name: 'Basisschool Ter Elst', lat: 50.8680, lon: 4.6740, walk_m: 1600, walk_min: 21, drive_m: 1900, drive_min: 6 },
+              { name: 'Kindercampus Arenberg', lat: 50.8642, lon: 4.6890, walk_m: 2100, walk_min: 27, drive_m: 2400, drive_min: 7 }] },
+            { key: 'market', score: 8.2, count: 12, nearest_m: 350, has_hospital: null, items: [
+              { name: 'Delhaize Heverlee', lat: 50.8745, lon: 4.6830, walk_m: 350, walk_min: 5, drive_m: 420, drive_min: 1 },
+              { name: 'Colruyt Heverlee', lat: 50.8771, lon: 4.6822, walk_m: 440, walk_min: 6, drive_m: 490, drive_min: 1 },
+              { name: 'Carrefour Express', lat: 50.8802, lon: 4.6760, walk_m: 900, walk_min: 12, drive_m: 1000, drive_min: 3 },
+              { name: 'Aldi Leuven-Zuid', lat: 50.8690, lon: 4.6900, walk_m: 1400, walk_min: 18, drive_m: 1600, drive_min: 5 },
+              { name: 'OKay Heverlee', lat: 50.8845, lon: 4.6720, walk_m: 1700, walk_min: 22, drive_m: 1900, drive_min: 6 }] },
+            { key: 'health', score: 6.9, count: 7, nearest_m: 600, has_hospital: true, items: [
+              { name: 'Apotheek Heverlee Centrum', lat: 50.8780, lon: 4.6850, walk_m: 600, walk_min: 8, drive_m: 700, drive_min: 2 },
+              { name: 'Huisartsenpraktijk Terbank', lat: 50.8730, lon: 4.6720, walk_m: 950, walk_min: 13, drive_m: 1100, drive_min: 3 },
+              { name: 'Wit-Gele Kruis Leuven', lat: 50.8830, lon: 4.6870, walk_m: 1500, walk_min: 20, drive_m: 1700, drive_min: 5 },
+              { name: 'UZ Leuven Gasthuisberg', lat: 50.8790, lon: 4.6660, walk_m: 1600, walk_min: 21, drive_m: 2100, drive_min: 5 },
+              { name: 'Medisch Centrum Heverlee', lat: 50.8660, lon: 4.6780, walk_m: 1900, walk_min: 25, drive_m: 2100, drive_min: 6 }] },
+            { key: 'transit', score: 8.5, count: 18, nearest_m: 180, has_hospital: null, items: [
+              { name: 'Halte Heverlee Kerk', lat: 50.8768, lon: 4.6790, walk_m: 180, walk_min: 2, drive_m: 250, drive_min: 1 },
+              { name: 'Halte Naamsesteenweg', lat: 50.8740, lon: 4.6770, walk_m: 400, walk_min: 5, drive_m: 500, drive_min: 1 },
+              { name: 'Halte Kantineplein', lat: 50.8730, lon: 4.6850, walk_m: 600, walk_min: 8, drive_m: 700, drive_min: 2 },
+              { name: 'Station Heverlee', lat: 50.8700, lon: 4.6940, walk_m: 850, walk_min: 11, drive_m: 950, drive_min: 3 },
+              { name: 'Station Leuven', lat: 50.8812, lon: 4.7160, walk_m: 2900, walk_min: 37, drive_m: 3300, drive_min: 8 }] },
+            { key: 'park', score: 7.1, count: 6, nearest_m: 500, has_hospital: null, items: [
+              { name: 'Park van Heverlee', lat: 50.8790, lon: 4.6870, walk_m: 500, walk_min: 7, drive_m: 600, drive_min: 2 },
+              { name: 'Arenbergpark', lat: 50.8630, lon: 4.6850, walk_m: 1100, walk_min: 14, drive_m: 1300, drive_min: 4 },
+              { name: 'Egenhoven Speelbos', lat: 50.8700, lon: 4.6600, walk_m: 1800, walk_min: 23, drive_m: 2000, drive_min: 5 },
+              { name: 'Sint-Lambertuspark', lat: 50.8880, lon: 4.6900, walk_m: 2000, walk_min: 26, drive_m: 2300, drive_min: 6 },
+              { name: 'Heverleebos', lat: 50.8560, lon: 4.6700, walk_m: 2300, walk_min: 30, drive_m: 2600, drive_min: 6 }] },
+            { key: 'sport', score: 5.9, count: 5, nearest_m: 900, has_hospital: null, items: [
+              { name: 'Universitair Sportcentrum', lat: 50.8620, lon: 4.6920, walk_m: 900, walk_min: 12, drive_m: 1000, drive_min: 3 },
+              { name: 'Basic-Fit Leuven Zuid', lat: 50.8800, lon: 4.6900, walk_m: 1200, walk_min: 16, drive_m: 1400, drive_min: 4 },
+              { name: 'Tennisclub Heverlee', lat: 50.8640, lon: 4.6750, walk_m: 1500, walk_min: 19, drive_m: 1700, drive_min: 5 },
+              { name: 'Petanqueclub Heverlee', lat: 50.8870, lon: 4.6750, walk_m: 2000, walk_min: 26, drive_m: 2300, drive_min: 6 },
+              { name: 'Sportoase Philipssite', lat: 50.8700, lon: 4.7100, walk_m: 2600, walk_min: 34, drive_m: 3000, drive_min: 7 }] }
+          ]
+        };
+      }
+
+      loadRecent() { try { return JSON.parse(localStorage.getItem('eca-recent') || '[]'); } catch (e) { return []; } }
+      saveRecent(addr) {
+        try {
+          let r = this.loadRecent().filter(x => x !== addr); r.unshift(addr); r = r.slice(0, 4);
+          localStorage.setItem('eca-recent', JSON.stringify(r));
+        } catch (e) {}
+      }
+
+      fmtDist(m) { return m < 1000 ? m + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
+      fmtScore(s) { return s.toFixed(1).replace('.', ','); }
+      scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
+
+      ic(key, color, size) {
+        const P = {
+          school: ['M2 9l10-5 10 5-10 5L2 9z', 'M6 11.5v4.3c0 1.5 2.7 2.7 6 2.7s6-1.2 6-2.7v-4.3', 'M22 9.5v4.5'],
+          market: ['M6.5 8.5h11l-1.2 10.5H7.7L6.5 8.5z', 'M9 8.5a3 3 0 0 1 6 0'],
+          health: ['M12 5v14', 'M5 12h14'],
+          transit: ['M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 15V6A1.5 1.5 0 0 1 6 4.5z', 'M4.5 11h15', 'M8.5 19.5h.01', 'M15.5 19.5h.01'],
+          park: ['M12 4.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5-2 4.2-4.5 4.2S7.5 11.5 7.5 9A4.5 4.5 0 0 1 12 4.5z', 'M12 13.5v6.5', 'M9.5 20h5'],
+          sport: ['M7 7.5v9', 'M17 7.5v9', 'M4 10v4', 'M20 10v4', 'M7 12h10'],
+          house: ['M4 11l8-7 8 7', 'M6 10v9h12v-9'],
+          sun: ['M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z', 'M12 2v2.5', 'M12 19.5V22', 'M2 12h2.5', 'M19.5 12H22', 'M4.6 4.6l1.8 1.8', 'M17.6 17.6l1.8 1.8', 'M19.4 4.6l-1.8 1.8', 'M6.4 17.6l-1.8 1.8'],
+          moon: ['M20 13.2A8 8 0 1 1 10.8 4a6.3 6.3 0 0 0 9.2 9.2z']
+        }[key];
+        return React.createElement('svg', { width: size || 18, height: size || 18, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+          P.map((d, i) => React.createElement('path', { key: i, d })));
+      }
+
+      hexA(hex, a) {
+        const n = parseInt(hex.slice(1), 16);
+        return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+      }
+
+      selectSuggestion(suggestion) {
+        if (this.addrEl) this.addrEl.value = suggestion.label;
+        this.setState({
+          address: suggestion.label,
+          selectedCoords: { label: suggestion.label, lat: suggestion.lat, lon: suggestion.lon },
+          suggestions: [], suggestionMessage: '', suggestionIndex: -1
+        });
+      }
+
+      loadSuggestions(value) {
+        const query = (value || '').trim(), t = this.T()[this.state.lang];
+        clearTimeout(this._ac);
+        if (query.length < 3) {
+          this.setState({ suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
+          return;
+        }
+        this.setState({ suggestions: [], suggestionMessage: t.suggestLoading, suggestionIndex: -1 });
+        this._ac = setTimeout(() => {
+          const requestValue = query;
+          fetch('/api/address-suggestions?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(this.state.lang))
+            .then(res => res.json().catch(() => ({})).then(j => ({ ok: res.ok, j })))
+            .then(({ ok, j }) => {
+              if (!this.addrEl || this.addrEl.value.trim() !== requestValue) return;
+              const suggestions = ok && Array.isArray(j.suggestions) ? j.suggestions : [];
+              this.setState({
+                suggestions,
+                suggestionIndex: -1,
+                suggestionMessage: suggestions.length ? '' : (j.message || (ok ? t.suggestNone : t.suggestError))
+              });
+            })
+            .catch(() => {
+              if (this.addrEl && this.addrEl.value.trim() === requestValue) {
+                this.setState({ suggestions: [], suggestionMessage: t.suggestError, suggestionIndex: -1 });
+              }
+            });
+        }, 300);
+      }
+
+      handleAddressInput(event) {
+        const value = event.target.value;
+        const selected = this.state.selectedCoords;
+        this.setState({ selectedCoords: selected && selected.label === value ? selected : null, address: value });
+        this.loadSuggestions(value);
+      }
+
+      handleAddressKey(event) {
+        const list = this.state.suggestions || [];
+        if (event.key === 'ArrowDown' && list.length) {
+          event.preventDefault();
+          this.setState({ suggestionIndex: Math.min(this.state.suggestionIndex + 1, list.length - 1) });
+        } else if (event.key === 'ArrowUp' && list.length) {
+          event.preventDefault();
+          this.setState({ suggestionIndex: Math.max(this.state.suggestionIndex - 1, 0) });
+        } else if (event.key === 'Escape') {
+          this.setState({ suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
+          if (this.state.suggestionIndex >= 0 && list[this.state.suggestionIndex]) this.selectSuggestion(list[this.state.suggestionIndex]);
+          else this.doSearch(this.addrEl && this.addrEl.value);
+        }
+      }
+
+      doSearch(addr, radius, options) {
+        addr = (addr || '').trim();
+        const t = this.T()[this.state.lang];
+        if (!addr) { this.setState({ formError: t.formErrAddr }); return; }
+        const r = radius || this.state.radius;
+        const opts = options || {}, preserve = !!opts.preserve;
+        this.setState(preserve
+          ? { formError: '', refreshing: true, radius: r }
+          : { formError: '', view: 'analysis', status: 'loading', address: addr, open: null, hidden: {}, radius: r,
+              refreshing: false, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
+        clearTimeout(this._st);
+
+        // Gövde: "enlem, boylam" biçimi koordinat olarak, aksi halde adres olarak gönderilir.
+        const body = { radius: r, lang: this.state.lang, topn: 20 };
+        const cm = addr.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*,\s*(-?\d+(?:[.,]\d+)?)\s*$/);
+        const selected = opts.coords || (this.state.selectedCoords && this.state.selectedCoords.label === addr ? this.state.selectedCoords : null);
+        if (selected) { body.address = addr; body.lat = selected.lat; body.lon = selected.lon; }
+        else if (cm) { body.lat = parseFloat(cm[1].replace(',', '.')); body.lon = parseFloat(cm[2].replace(',', '.')); }
+        else { body.address = addr; }
+
+        const reqId = (this._req = (this._req || 0) + 1);
+        fetch('/api/analyze', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        })
+          .then(res => res.json().catch(() => ({})).then(j => ({ ok: res.ok, status: res.status, j })))
+          .then(({ ok, status, j }) => {
+            if (reqId !== this._req) return;               // eski isteği yok say
+            if (!ok) {
+              this.setState({ status: 'error', refreshing: false, errorKind: status === 400 ? 'notfound' : 'server' });
+              return;
+            }
+            const total = (j.categories || []).reduce((s, c) => s + (c.count || 0), 0);
+            if (!j.categories || total === 0) {
+              this.setState({ status: 'error', refreshing: false, errorKind: 'empty' });
+              return;
+            }
+            this.saveRecent(addr);
+            if (this.map) { this.map.remove(); this.map = null; this.tiles = null; this.mk = {}; this.groups = {}; }
+            this.setState({ status: 'results', refreshing: false, data: j, address: addr, recent: this.loadRecent() });
+          })
+          .catch(() => { if (reqId === this._req) this.setState({ status: 'error', refreshing: false, errorKind: 'server' }); });
+      }
+
+      setLang(lang) {
+        try { localStorage.setItem('eca-lang', lang); } catch (e) {}
+        if (this.map) { this.map.remove(); this.map = null; this.tiles = null; this.mk = {}; this.groups = {}; }
+        this.setState({ lang, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
+      }
+
+      componentDidMount() { window.addEventListener('resize', this.onResize); this.syncMap(); }
+      componentWillUnmount() {
+        window.removeEventListener('resize', this.onResize);
+        clearTimeout(this._st); clearTimeout(this._lt); clearTimeout(this._ac);
+        if (this.map) { this.map.remove(); this.map = null; }
+      }
+
+      componentDidUpdate(prevProps) {
+        if (prevProps && prevProps.demoState !== this.props.demoState) {
+          const p = this.demoPatch(this.props.demoState);
+          this.setState(Object.keys(p).length ? p : { view: 'home', status: 'results', errorKind: null });
+        }
+        if (prevProps && prevProps.theme !== this.props.theme && this.props.theme) this.setState({ theme: this.props.theme });
+        if (prevProps && prevProps.language !== this.props.language && this.props.language) this.setLang(this.props.language);
+        this.syncMap();
+      }
+
+      syncMap() {
+        const want = this.state.view === 'analysis' && this.state.status === 'results' && this.state.data;
+        if (want && this.mapEl && !this.map) this.initMap();
+        if (!want && this.map) { this.map.remove(); this.map = null; this.tiles = null; this.mk = {}; this.groups = {}; }
+        if (this.map && this.tileTheme !== this.state.theme) this.addTiles();
+      }
+
+      initMap() {
+        if (!window.L) { clearTimeout(this._lt); this._lt = setTimeout(() => this.syncMap(), 200); return; }
+        const d = this.state.data, c = [d.lat, d.lon], COL = this.COLORS();
+        const t = this.T()[this.state.lang];
+        this.map = L.map(this.mapEl, { zoomControl: true }).setView(c, 14);
+        this.addTiles();
+        const circle = L.circle(c, { radius: d.radius, color: '#2E6FDB', weight: 1.5, dashArray: '4 6', fillColor: '#2E6FDB', fillOpacity: 0.05 }).addTo(this.map);
+        L.marker(c, { icon: L.divIcon({ className: '', iconSize: [38, 38], iconAnchor: [19, 19], html: '<div style="width:38px;height:38px;border-radius:50%;background:#1c2430;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.35);display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg></div>' }) })
+          .addTo(this.map).bindPopup('<b>' + d.display_address + '</b><br>' + t.searched);
+        this.mk = {}; this.groups = {};
+        d.categories.forEach(cat => {
+          const g = L.layerGroup(); this.mk[cat.key] = [];
+          cat.items.forEach((it, i) => {
+            const m = L.circleMarker([it.lat, it.lon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
+              .bindPopup('<b>' + it.name + '</b><br>' + t.walk + ': ' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>' + t.drive + ': ' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
+            m.addTo(g); this.mk[cat.key][i] = m;
+          });
+          this.groups[cat.key] = g;
+          if (!this.state.hidden[cat.key]) g.addTo(this.map);
+        });
+        this.map.fitBounds(circle.getBounds().pad(0.04));
+      }
+
+      addTiles() {
+        if (!this.map || !window.L) return;
+        if (this.tiles) this.map.removeLayer(this.tiles);
+        const dark = this.state.theme === 'dark';
+        this.tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/' + (dark ? 'dark_all' : 'light_all') + '/{z}/{x}/{y}{r}.png',
+          { attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19 }).addTo(this.map);
+        this.tiles.bringToBack();
+        this.tileTheme = this.state.theme;
+      }
+
+      renderVals() {
+        const S = this.state, COL = this.COLORS();
+        const t = this.T()[S.lang];
+        const dark = S.theme === 'dark';
+        const narrow = S.isNarrow;
+        const stacked = S.viewportWidth < 1200;
+        const rootStyle = dark
+          ? { minHeight: '100vh', '--bg': '#11141b', '--surface': '#1a1f2a', '--ink': '#e9ecf2', '--muted': '#98a1b0', '--line': 'rgba(255,255,255,.09)', '--chip': '#242b38', '--shadow': '0 1px 3px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25)' }
+          : { minHeight: '100vh' };
+
+        const langOpts = ['tr', 'en', 'nl'].map(code => ({
+          label: code.toUpperCase(),
+          pick: () => this.setLang(code),
+          style: S.lang === code
+            ? { padding: '7px 11px', minHeight: '32px', borderRadius: '999px', border: 'none', background: '#2E6FDB', color: '#fff', font: '800 11.5px Manrope', cursor: 'pointer' }
+            : { padding: '7px 11px', minHeight: '32px', borderRadius: '999px', border: 'none', background: 'transparent', color: 'var(--muted)', font: '700 11.5px Manrope', cursor: 'pointer' }
+        }));
+
+        const radiusOpts = [[1000, '1 km'], [2500, '2,5 km'], [5000, '5 km']].map(([v, label]) => ({
+          label: S.lang === 'tr' ? label : label.replace(',', '.'),
+          pick: () => this.setState({ radius: v }),
+          style: S.radius === v
+            ? { padding: '9px 15px', minHeight: '38px', borderRadius: '999px', border: '1px solid #2E6FDB', background: '#2E6FDB', color: '#fff', font: '700 12px Manrope', cursor: 'pointer' }
+            : { padding: '9px 15px', minHeight: '38px', borderRadius: '999px', border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--muted)', font: '600 12px Manrope', cursor: 'pointer' }
+        }));
+
+        const resultRadiusOpts = [[1000, '1 km'], [2500, '2,5 km'], [5000, '5 km']].map(([v, label]) => ({
+          label: S.lang === 'tr' ? label : label.replace(',', '.'),
+          pick: () => {
+            if (!S.data || S.refreshing || S.data.radius === v) return;
+            this.doSearch(S.address || S.data.display_address, v, {
+              preserve: true, coords: { lat: S.data.lat, lon: S.data.lon }
+            });
+          },
+          style: S.radius === v
+            ? { padding: '7px 12px', minHeight: '34px', borderRadius: '999px', border: '1px solid #2E6FDB', background: '#2E6FDB', color: '#fff', font: '700 11.5px Manrope', cursor: 'pointer' }
+            : { padding: '7px 12px', minHeight: '34px', borderRadius: '999px', border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--muted)', font: '600 11.5px Manrope', cursor: S.refreshing ? 'wait' : 'pointer' }
+        }));
+
+        const suggestions = (S.suggestions || []).map((suggestion, index) => ({
+          label: suggestion.label,
+          resultType: String(suggestion.result_type || '').replace(/_/g, ' '),
+          pick: event => { if (event) event.preventDefault(); this.selectSuggestion(suggestion); },
+          style: {
+            width: '100%', border: 'none', borderBottom: '1px solid var(--line)', background: index === S.suggestionIndex ? 'var(--chip)' : 'var(--surface)',
+            color: 'var(--ink)', padding: '11px 13px', cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '3px', fontFamily: 'Manrope'
+          }
+        }));
+
+        const recent = (S.recent || []).map(a => ({ label: a, pick: () => this.doSearch(a) }));
+
+        const mapBoxStyle = Object.assign(
+          { flex: '3 1 480px', width: stacked ? '100%' : 'auto', minWidth: 0, position: 'relative', background: 'var(--chip)' },
+          stacked ? { height: narrow ? '44vh' : '50vh', minHeight: narrow ? '300px' : '360px', flex: 'none' }
+                  : { height: 'calc(100vh - 61px)', minHeight: '420px' });
+        const panelStyle = Object.assign(
+          { flex: '2 1 360px', width: stacked ? '100%' : 'auto', minWidth: 0, overflow: 'visible', padding: narrow ? '14px' : '18px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '1px solid var(--line)' },
+          { maxHeight: 'none', height: 'auto', flexShrink: 0 });
+
+        const d = S.data;
+        const cats = (d ? d.categories : []).map(cat => {
+          const col = COL[cat.key], sc = this.scoreColor(cat.score), hid = !!S.hidden[cat.key], open = S.open === cat.key;
+          return {
+            key: cat.key, label: t.cats[cat.key], count: cat.count, isOpen: open,
+            isMarket: cat.key === 'market', infoOpen: cat.key === 'market' && S.marketInfoOpen,
+            icon: this.ic(cat.key, col, 19),
+            iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
+            scoreStr: this.fmtScore(cat.score),
+            scoreStyle: { font: '800 17px Manrope', color: sc },
+            barStyle: { height: '100%', width: (cat.score * 10) + '%', borderRadius: '3px', background: sc, transition: 'width .5s ease' },
+            countStr: cat.count + ' ' + t.points,
+            nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m),
+            marketNote: cat.key === 'market' ? t.marketNote : null,
+            toggleInfo: () => this.setState({ marketInfoOpen: !this.state.marketInfoOpen }),
+            limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
+            badge: cat.key === 'health' ? (cat.has_hospital ? t.hospY : t.hospN) : null,
+            badgeStyle: cat.has_hospital
+              ? { padding: '3px 9px', borderRadius: '999px', background: this.hexA('#3E9B4F', 0.15), color: '#3E9B4F', font: '700 10.5px Manrope' }
+              : { padding: '3px 9px', borderRadius: '999px', background: this.hexA('#E8963B', 0.17), color: '#c07a22', font: '700 10.5px Manrope' },
+            chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
+            toggle: () => this.setState({ open: open ? null : cat.key }),
+            toggleFilter: () => {
+              const hidden = Object.assign({}, this.state.hidden); hidden[cat.key] = !hidden[cat.key];
+              if (this.map && this.groups[cat.key]) { hidden[cat.key] ? this.map.removeLayer(this.groups[cat.key]) : this.groups[cat.key].addTo(this.map); }
+              this.setState({ hidden });
+            },
+            chipStyle: {
+              pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: narrow ? '6px 10px' : '7px 12px', borderRadius: '999px',
+              border: '1px solid ' + (hid ? 'var(--line)' : col), background: hid ? 'var(--surface)' : col, color: hid ? 'var(--muted)' : '#fff',
+              font: '700 ' + (narrow ? '11px' : '12px') + ' Manrope', cursor: 'pointer', boxShadow: 'var(--shadow)', opacity: hid ? 0.8 : 1
+            },
+            rows: cat.items.map((it, i) => ({
+              name: it.name,
+              typeStr: it.type || '',
+              walkStr: t.walk + ' ' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
+              driveStr: t.drive + ' ' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,
+              enter: () => { const m = this.mk[cat.key] && this.mk[cat.key][i]; if (m) { m.setStyle({ radius: 12, weight: 3.5 }); m.bringToFront(); } },
+              leave: () => { const m = this.mk[cat.key] && this.mk[cat.key][i]; if (m) m.setStyle({ radius: 8, weight: 2 }); }
+            }))
+          };
+        });
+
+        const overall = d ? d.overall : 0, oc = this.scoreColor(overall);
+        const ci = overall >= 8 ? 0 : overall >= 7 ? 1 : overall >= 5.5 ? 2 : overall >= 4 ? 3 : 4;
+        const poiTotal = d ? d.categories.reduce((s, c) => s + c.count, 0) : 0;
+
+        const ERR = {
+          notfound: [t.errNotfoundT, t.errNotfoundD],
+          server: [t.errServerT, t.errServerD],
+          empty: [t.errEmptyT, t.errEmptyD]
+        }[S.errorKind] || ['', ''];
+
+        const swHex = [dark ? '#11141b' : '#f6f5f2', dark ? '#1a1f2a' : '#ffffff', dark ? '#e9ecf2' : '#1c2430', dark ? '#98a1b0' : '#66707e',
+          '#2E6FDB', '#E8842C', '#D64545', '#7C4DBE', '#3E9B4F', '#3A8FA3', '#D64545', '#E8963B', '#3E9B4F'];
+        const swatches = t.swNames.map((name, i) => ({ name, hex: swHex[i], style: { height: '52px', background: swHex[i], borderBottom: '1px solid var(--line)' } }));
+
+        return {
+          rootStyle, t, langOpts,
+          isHome: S.view === 'home', isAnalysis: S.view === 'analysis', isStyle: S.view === 'style',
+          isLoading: S.view === 'analysis' && S.status === 'loading',
+          isResults: S.view === 'analysis' && S.status === 'results',
+          isError: S.view === 'analysis' && S.status === 'error',
+          notError: S.status !== 'error',
+          errIsEmpty: S.errorKind === 'empty', errIsNotEmpty: S.errorKind !== 'empty',
+          errorTitle: ERR[0], errorDesc: ERR[1],
+          formError: S.formError,
+          suggestions, suggestionMessage: S.suggestionMessage,
+          showSuggestionPanel: S.view === 'home' && (suggestions.length > 0 || !!S.suggestionMessage),
+          suggestionsOpen: suggestions.length > 0 || !!S.suggestionMessage,
+          logoIcon: this.ic('house', '#fff', 18),
+          vpIcon1: this.ic('school', '#2E6FDB', 19), vpIcon2: this.ic('transit', '#7C4DBE', 19), vpIcon3: this.ic('park', '#3E9B4F', 19),
+          themeIcon: this.ic(dark ? 'sun' : 'moon', 'currentColor', 15),
+          themeLabel: dark ? t.themeLight : t.themeDark,
+          toggleTheme: () => { const th = dark ? 'light' : 'dark'; try { localStorage.setItem('eca-theme', th); } catch (e) {} this.setState({ theme: th }); },
+          addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; },
+          onAddrInput: e => this.handleAddressInput(e),
+          onAddrKey: e => this.handleAddressKey(e),
+          onSearch: () => this.doSearch(this.addrEl && this.addrEl.value),
+          onCoordSearch: () => {
+            const la = parseFloat(this.latEl && this.latEl.value), lo = parseFloat(this.lonEl && this.lonEl.value);
+            if (isNaN(la) || isNaN(lo)) { this.setState({ formError: t.formErrCoord }); return; }
+            this.doSearch(la.toFixed(5) + ', ' + lo.toFixed(5));
+          },
+          radiusOpts, resultRadiusOpts, recent, hasRecent: recent.length > 0,
+          openStyle: e => { e.preventDefault(); this.setState({ view: 'style' }); },
+          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false }),
+          onPrint: () => window.print(),
+          retry: () => this.doSearch(S.address || this.DEF_ADDR()),
+          retryBigger: () => this.doSearch(S.address || this.DEF_ADDR(), 5000),
+          displayAddress: d ? d.display_address : (S.address || this.DEF_ADDR()),
+          metaLine: t.radiusWord + ' ' + this.fmtDist(d ? d.radius : S.radius) + (d ? ' · ' + d.lat.toFixed(4) + ', ' + d.lon.toFixed(4) : ''),
+          setMapEl: el => { this.mapEl = el; if (el) this.syncMap(); },
+          mapBoxStyle, panelStyle,
+          isRefreshing: S.refreshing,
+          cats, skeletons: [1, 2, 3, 4, 5, 6],
+          overallStr: d ? this.fmtScore(overall) : '', overallColor: oc, overallComment: t.comments[ci],
+          radiusLine: d ? t.foundLine(this.fmtDist(d.radius), poiTotal) : '',
+          dataNotice: d && d.data_mode === 'demo' ? t.demoNotice : null,
+          gaugeStyle: { width: '92px', height: '92px', borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', background: 'conic-gradient(' + oc + ' ' + (overall * 10) + '%, var(--chip) 0)' },
+          swatches
+        };
+      }
+    }
+</script>
+</body>
+</html>
