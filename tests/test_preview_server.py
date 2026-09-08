@@ -186,6 +186,23 @@ class RadiusReanalysisApiTests(unittest.TestCase):
             breakdown = server._school_score_breakdown(object(), 50.0, 4.0)
         self.assertEqual(breakdown["nearest_core_school_m"], 500.0)
 
+    def test_health_uses_dedicated_path_and_exposes_fixed_breakdown(self):
+        health_categories = [next(
+            category for category in self.analyze(radius)["categories"]
+            if category["key"] == "health") for radius in (1000, 2500, 5000)]
+        self.assertEqual([category["score"] for category in health_categories],
+                         [health_categories[0]["score"]] * 3)
+        breakdowns = [category["score_breakdown"] for category in health_categories]
+        self.assertEqual(breakdowns, [breakdowns[0]] * 3)
+        self.assertEqual(set(breakdowns[0]), {
+            "clinical_proximity_points", "choice_points", "hospital_points",
+            "nearest_clinical_m", "nearest_hospital_m",
+        })
+        self.assertAlmostEqual(
+            breakdowns[0]["clinical_proximity_points"]
+            + breakdowns[0]["choice_points"] + breakdowns[0]["hospital_points"],
+            health_categories[0]["score"], places=1)
+
 
 class SchoolExplanationContentTests(unittest.TestCase):
     @classmethod
@@ -225,8 +242,119 @@ class SchoolExplanationContentTests(unittest.TestCase):
             self.frontend,
         )
 
-    def test_non_school_poi_types_keep_existing_raw_rendering(self):
-        self.assertIn(": (it.type || ''),", self.frontend)
+    def test_non_school_non_health_poi_types_keep_existing_raw_rendering(self):
+        self.assertIn(
+            ": (cat.key === 'health' ? (t.healthTypes[it.type] || it.type || '') : (it.type || ''))",
+            self.frontend,
+        )
+
+
+class HealthExplanationContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(encoding="utf-8")
+
+    def test_health_explanation_exists_in_all_languages(self):
+        for text in (
+            "Sağlık skoru, yerel klinik sağlık hizmetlerine yakınlık, yakındaki sağlık seçenekleri ve hastane erişimi olmak üzere üç bölümden oluşur.",
+            "De gezondheidsscore bestaat uit drie onderdelen: nabijheid van lokale klinische zorg, lokale zorgkeuze en toegang tot een ziekenhuis.",
+            "The Health score has three components: local clinical care proximity, local healthcare choice, and hospital access.",
+            "Diş hekimi ve diğer uzman sağlık hizmetleri bu puanı etkilemez.",
+            "Tandartsen en andere gespecialiseerde zorgdiensten beïnvloeden deze score niet.",
+            "Dentists and other specialist healthcare services do not affect this score.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_health_panel_renders_all_existing_breakdown_components(self):
+        for field in (
+            "cat.score_breakdown.clinical_proximity_points",
+            "cat.score_breakdown.choice_points",
+            "cat.score_breakdown.hospital_points",
+        ):
+            self.assertIn(field, self.frontend)
+        for rendered_value in (
+            "cat.clinicalProximityStr }} / 5",
+            "cat.healthChoiceStr }} / 3",
+            "cat.hospitalPointsStr }} / 2",
+            "cat.healthScoreStr }} / 10",
+        ):
+            self.assertIn(rendered_value, self.frontend)
+
+    def test_health_breakdown_does_not_enter_market_school_formatters(self):
+        self.assertIn(
+            "proximityStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown",
+            self.frontend,
+        )
+        self.assertIn(
+            "choiceStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown",
+            self.frontend,
+        )
+
+    def test_health_scoring_distances_use_breakdown_fields_and_safe_null_fallbacks(self):
+        self.assertIn("cat.score_breakdown.nearest_clinical_m", self.frontend)
+        self.assertIn("cat.score_breakdown.nearest_hospital_m", self.frontend)
+        self.assertIn("t.healthNearestClinicalNone", self.frontend)
+        self.assertIn("t.healthNearestHospitalNone", self.frontend)
+        self.assertIn("2,5 km içinde bulunamadı", self.frontend)
+        self.assertIn("20 km içinde bulunamadı", self.frontend)
+
+    def test_health_explanation_does_not_use_legacy_summary_fields(self):
+        start = self.frontend.index("clinicalProximityStr:")
+        end = self.frontend.index("limitNote:", start)
+        health_view_model = self.frontend[start:end]
+        self.assertNotIn("nearest_m", health_view_model)
+        self.assertNotIn("n_total", health_view_model)
+        self.assertNotIn("has_hospital", health_view_model)
+
+    def test_health_summary_uses_scoring_distances_not_legacy_fields(self):
+        start = self.frontend.index("healthCountStr:")
+        end = self.frontend.index("toggleInfo:", start)
+        summary_view_model = self.frontend[start:end]
+        self.assertIn("cat.score_breakdown.nearest_clinical_m", summary_view_model)
+        self.assertIn("cat.score_breakdown.nearest_hospital_m", summary_view_model)
+        self.assertNotIn("cat.nearest_m", summary_view_model)
+        self.assertNotIn("cat.has_hospital", summary_view_model)
+        self.assertNotIn("hospY", summary_view_model)
+        self.assertNotIn("hospN", summary_view_model)
+
+    def test_health_summary_has_localized_null_fallbacks(self):
+        for text in (
+            "2,5 km içinde klinik sağlık noktası yok",
+            "20 km içinde hastane tesisi yok",
+            "geen klinische zorglocatie binnen 2,5 km",
+            "geen ziekenhuisvoorziening binnen 20 km",
+            "no clinical care location within 2.5 km",
+            "no hospital facility within 20 km",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_health_poi_types_are_translated_in_all_languages(self):
+        for mapping in (
+            "healthTypes: { clinic: 'Klinik', doctor: 'Doktor', doctors: 'Doktor', pharmacy: 'Eczane', dentist: 'Diş hekimi', hospital: 'Hastane', physiotherapist: 'Fizyoterapist', psychotherapist: 'Psikoterapist', laboratory: 'Laboratuvar', blood_donation: 'Kan bağışı' }",
+            "healthTypes: { clinic: 'Kliniek', doctor: 'Arts', doctors: 'Arts', pharmacy: 'Apotheek', dentist: 'Tandarts', hospital: 'Ziekenhuis', physiotherapist: 'Kinesitherapeut', psychotherapist: 'Psychotherapeut', laboratory: 'Laboratorium', blood_donation: 'Bloeddonatie' }",
+            "healthTypes: { clinic: 'Clinic', doctor: 'Doctor', doctors: 'Doctor', pharmacy: 'Pharmacy', dentist: 'Dentist', hospital: 'Hospital', physiotherapist: 'Physiotherapist', psychotherapist: 'Psychotherapist', laboratory: 'Laboratory', blood_donation: 'Blood donation' }",
+        ):
+            self.assertIn(mapping, self.frontend)
+
+    def test_health_type_translation_is_reactive_and_has_raw_fallback(self):
+        self.assertIn(
+            "cat.key === 'health' ? (t.healthTypes[it.type] || it.type || '')",
+            self.frontend,
+        )
+        self.assertIn(
+            "textTransform: (cat.key === 'school' || cat.key === 'health') ? 'none' : 'capitalize'",
+            self.frontend,
+        )
+
+    def test_existing_market_and_school_explanations_remain_present(self):
+        self.assertIn(
+            "The Market score is always calculated using grocery options within 2.5 km of the address.",
+            self.frontend,
+        )
+        self.assertIn(
+            "The School score is always calculated using education options within a 2.5 km radius.",
+            self.frontend,
+        )
 
 
 if __name__ == "__main__":

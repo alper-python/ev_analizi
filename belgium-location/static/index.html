@@ -96,6 +96,12 @@
                 align-items: start
             }
             .category-grid > * { min-width: 0 }
+            .health-breakdown-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 6px;
+                margin: 9px 0
+            }
             .language-picker {
                 display: inline-flex;
                 align-items: center;
@@ -454,9 +460,14 @@
                                                     <div style="{{ cat.barStyle }}"></div>
                                                 </div>
                                                 <div style="display:flex;gap:8px;align-items:center;font:600 12px Manrope;color:var(--muted);flex-wrap:wrap">
-                                                    <span>{{ cat.countStr }}</span><span>·</span><span>{{ cat.nearestStr }}</span>
-                                                    <sc-if value="{{ cat.badge }}" hint-placeholder-val="{{ false }}">
-                                                        <span style="{{ cat.badgeStyle }}">{{ cat.badge }}</span>
+                                                    <sc-if value="{{ cat.isNonHealth }}" hint-placeholder-val="{{ true }}">
+                                                        <span>{{ cat.countStr }}</span><span>·</span><span>{{ cat.nearestStr }}</span>
+                                                    </sc-if>
+                                                    <sc-if value="{{ cat.isHealth }}" hint-placeholder-val="{{ false }}">
+                                                        <span>{{ cat.healthCountStr }}</span>
+                                                        <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
+                                                            <span>·</span><span>{{ cat.healthClinicalSummaryStr }}</span><span>·</span><span>{{ cat.healthHospitalSummaryStr }}</span>
+                                                        </sc-if>
                                                     </sc-if>
                                                 </div>
                                             </div>
@@ -501,6 +512,30 @@
                                                 </sc-if>
                                             </div>
                                         </sc-if>
+                                        <sc-if value="{{ cat.isHealth }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:0 16px 11px 66px">
+                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.healthHow }}</button>
+                                                <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                        <div>{{ t.healthNote }}</div>
+                                                        <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
+                                                            <div class="health-breakdown-grid">
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.healthClinicalLabel }}</span><strong style="color:var(--ink)">{{ cat.clinicalProximityStr }} / 5</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.healthChoiceLabel }}</span><strong style="color:var(--ink)">{{ cat.healthChoiceStr }} / 3</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.healthHospitalLabel }}</span><strong style="color:var(--ink)">{{ cat.hospitalPointsStr }} / 2</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.healthTotalLabel }}</span><strong style="color:var(--ink)">{{ cat.healthScoreStr }} / 10</strong></div>
+                                                            </div>
+                                                            <div style="font-weight:700;color:var(--ink)">{{ cat.nearestClinicalStr }}</div>
+                                                            <div style="font-weight:700;color:var(--ink);margin-top:4px">{{ cat.nearestHospitalStr }}</div>
+                                                        </sc-if>
+                                                        <div style="margin-top:7px">{{ t.healthClinicalNote }}</div>
+                                                        <div style="margin-top:5px">{{ t.healthChoiceNote }}</div>
+                                                        <div style="margin-top:5px">{{ t.healthHospitalNote }}</div>
+                                                        <div style="margin-top:5px">{{ t.healthRadiusNote }}</div>
+                                                    </div>
+                                                </sc-if>
+                                            </div>
+                                        </sc-if>
                                         <sc-if value="{{ cat.isOpen }}" hint-placeholder-val="{{ false }}">
                                             <div style="border-top:1px solid var(--line)">
                                                 <sc-if value="{{ cat.limitNote }}" hint-placeholder-val="{{ false }}">
@@ -516,7 +551,7 @@
                                                                 {{ row.name }}
                                                             </div>
                                                             <sc-if value="{{ row.typeStr }}" hint-placeholder-val="{{ false }}">
-                                                                <div style="font:600 10.5px Manrope;color:var(--muted);text-transform:capitalize">{{ row.typeStr }}</div>
+                                                                <div style="{{ row.typeStyle }}">{{ row.typeStr }}</div>
                                                             </sc-if>
                                                             <div class="poi-distances">
                                                                 <span class="poi-distance"><span aria-hidden="true">📍</span>{{ row.straightStr }}</span>
@@ -639,7 +674,7 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, radiusInfoOpen: false,
+          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, radiusInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -677,7 +712,8 @@
             errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
             schoolTypes: { school: 'Okul', kindergarten: 'Anaokulu' },
-            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
+            healthTypes: { clinic: 'Klinik', doctor: 'Doktor', doctors: 'Doktor', pharmacy: 'Eczane', dentist: 'Diş hekimi', hospital: 'Hastane', physiotherapist: 'Fizyoterapist', psychotherapist: 'Psikoterapist', laboratory: 'Laboratuvar', blood_donation: 'Kan bağışı' },
+            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
             radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
             proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
@@ -689,6 +725,21 @@
             schoolChoiceLabel: 'Yakındaki seçenekler', schoolTotalLabel: 'Toplam',
             schoolNearest: dist => 'En yakın okul: ' + dist + ' kuş uçuşu',
             schoolNearestNone: 'En yakın okul: 2,5 km içinde bulunamadı',
+            healthNote: 'Sağlık skoru, yerel klinik sağlık hizmetlerine yakınlık, yakındaki sağlık seçenekleri ve hastane erişimi olmak üzere üç bölümden oluşur.',
+            healthClinicalNote: 'Yerel klinik erişimi, 2,5 km içinde bulunan en yakın doktor veya klinik sağlık noktasının kuş uçuşu mesafesine göre hesaplanır.',
+            healthChoiceNote: 'Doktor ve klinikler seçenek puanına tam, eczaneler ise daha düşük ağırlıkla katkı sağlar. Diş hekimi ve diğer uzman sağlık hizmetleri bu puanı etkilemez.',
+            healthHospitalNote: 'Hastane erişimi, 20 km içindeki en yakın uygun hastane tesisinin kuş uçuşu mesafesine göre ayrıca değerlendirilir.',
+            healthRadiusNote: 'Gösterim yarıçapını değiştirmek haritadaki ve listedeki sonuçları değiştirir, sağlık skorunu değiştirmez.',
+            healthClinicalLabel: 'Yerel klinik erişimi', healthChoiceLabel: 'Yakındaki sağlık seçenekleri', healthHospitalLabel: 'Hastane erişimi', healthTotalLabel: 'Toplam',
+            healthNearestClinical: dist => 'En yakın klinik sağlık noktası: ' + dist + ' kuş uçuşu',
+            healthNearestClinicalNone: 'En yakın klinik sağlık noktası: 2,5 km içinde bulunamadı',
+            healthNearestHospital: dist => 'En yakın hastane tesisi: ' + dist + ' kuş uçuşu',
+            healthNearestHospitalNone: 'En yakın hastane tesisi: 20 km içinde bulunamadı',
+            healthResults: 'sonuç',
+            healthClinicalSummary: dist => 'en yakın klinik: ' + dist + ' kuş uçuşu',
+            healthClinicalSummaryNone: '2,5 km içinde klinik sağlık noktası yok',
+            healthHospitalSummary: dist => 'hastane: ' + dist,
+            healthHospitalSummaryNone: '20 km içinde hastane tesisi yok',
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -722,7 +773,8 @@
             errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
             schoolTypes: { school: 'School', kindergarten: 'Kindergarten' },
-            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
+            healthTypes: { clinic: 'Clinic', doctor: 'Doctor', doctors: 'Doctor', pharmacy: 'Pharmacy', dentist: 'Dentist', hospital: 'Hospital', physiotherapist: 'Physiotherapist', psychotherapist: 'Psychotherapist', laboratory: 'Laboratory', blood_donation: 'Blood donation' },
+            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
             radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
             proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
@@ -734,6 +786,21 @@
             schoolChoiceLabel: 'Nearby options', schoolTotalLabel: 'Total',
             schoolNearest: dist => 'Nearest school: ' + dist + ' straight-line',
             schoolNearestNone: 'Nearest school: none within 2.5 km',
+            healthNote: 'The Health score has three components: local clinical care proximity, local healthcare choice, and hospital access.',
+            healthClinicalNote: 'Local clinical care proximity is based on the straight-line distance to the nearest doctor or clinical care location within 2.5 km.',
+            healthChoiceNote: 'Doctors and clinics contribute fully to healthcare choice, while pharmacies contribute with a lower weighting. Dentists and other specialist healthcare services do not affect this score.',
+            healthHospitalNote: 'Hospital access is assessed separately using the straight-line distance to the nearest qualifying hospital facility within 20 km.',
+            healthRadiusNote: 'Changing the display radius changes the results on the map and in the list, but does not change the Health score.',
+            healthClinicalLabel: 'Local clinical care', healthChoiceLabel: 'Local healthcare choice', healthHospitalLabel: 'Hospital access', healthTotalLabel: 'Total',
+            healthNearestClinical: dist => 'Nearest clinical care location: ' + dist + ' straight-line',
+            healthNearestClinicalNone: 'Nearest clinical care location: none within 2.5 km',
+            healthNearestHospital: dist => 'Nearest hospital facility: ' + dist + ' straight-line',
+            healthNearestHospitalNone: 'Nearest hospital facility: none within 20 km',
+            healthResults: 'results',
+            healthClinicalSummary: dist => 'nearest clinical care: ' + dist + ' straight-line',
+            healthClinicalSummaryNone: 'no clinical care location within 2.5 km',
+            healthHospitalSummary: dist => 'hospital: ' + dist,
+            healthHospitalSummaryNone: 'no hospital facility within 20 km',
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -767,7 +834,8 @@
             errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
             schoolTypes: { school: 'School', kindergarten: 'Kleuterschool' },
-            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
+            healthTypes: { clinic: 'Kliniek', doctor: 'Arts', doctors: 'Arts', pharmacy: 'Apotheek', dentist: 'Tandarts', hospital: 'Ziekenhuis', physiotherapist: 'Kinesitherapeut', psychotherapist: 'Psychotherapeut', laboratory: 'Laboratorium', blood_donation: 'Bloeddonatie' },
+            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
             radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
             proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
@@ -779,6 +847,21 @@
             schoolChoiceLabel: 'Opties in de buurt', schoolTotalLabel: 'Totaal',
             schoolNearest: dist => 'Dichtstbijzijnde school: ' + dist + ' hemelsbreed',
             schoolNearestNone: 'Dichtstbijzijnde school: geen binnen 2,5 km',
+            healthNote: 'De gezondheidsscore bestaat uit drie onderdelen: nabijheid van lokale klinische zorg, lokale zorgkeuze en toegang tot een ziekenhuis.',
+            healthClinicalNote: 'De nabijheid van lokale klinische zorg wordt berekend op basis van de hemelsbrede afstand tot de dichtstbijzijnde arts of klinische zorglocatie binnen 2,5 km.',
+            healthChoiceNote: 'Artsen en klinieken tellen volledig mee voor de keuzepunten. Apotheken tellen met een lager gewicht mee. Tandartsen en andere gespecialiseerde zorgdiensten beïnvloeden deze score niet.',
+            healthHospitalNote: 'De toegang tot een ziekenhuis wordt afzonderlijk beoordeeld op basis van de hemelsbrede afstand tot de dichtstbijzijnde geschikte ziekenhuisvoorziening binnen 20 km.',
+            healthRadiusNote: 'Als u de weergavestraal wijzigt, veranderen de resultaten op de kaart en in de lijst, maar niet de gezondheidsscore.',
+            healthClinicalLabel: 'Lokale klinische zorg', healthChoiceLabel: 'Lokale zorgkeuze', healthHospitalLabel: 'Toegang tot ziekenhuis', healthTotalLabel: 'Totaal',
+            healthNearestClinical: dist => 'Dichtstbijzijnde klinische zorglocatie: ' + dist + ' hemelsbreed',
+            healthNearestClinicalNone: 'Dichtstbijzijnde klinische zorglocatie: geen binnen 2,5 km',
+            healthNearestHospital: dist => 'Dichtstbijzijnde ziekenhuisvoorziening: ' + dist + ' hemelsbreed',
+            healthNearestHospitalNone: 'Dichtstbijzijnde ziekenhuisvoorziening: geen binnen 20 km',
+            healthResults: 'resultaten',
+            healthClinicalSummary: dist => 'dichtstbijzijnde klinische zorg: ' + dist + ' hemelsbreed',
+            healthClinicalSummaryNone: 'geen klinische zorglocatie binnen 2,5 km',
+            healthHospitalSummary: dist => 'ziekenhuis: ' + dist,
+            healthHospitalSummaryNone: 'geen ziekenhuisvoorziening binnen 20 km',
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -861,6 +944,11 @@
       fmtDist(m) { return m < 1000 ? m + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
       fmtScore(s) { return s.toFixed(1).replace('.', ','); }
       fmtSchoolBreakdownScore(s) { const value = s.toFixed(1); return this.state.lang === 'en' ? value : value.replace('.', ','); }
+      fmtHealthValue(value) { const formatted = value.toFixed(1); return this.state.lang === 'en' ? formatted : formatted.replace('.', ','); }
+      fmtHealthDistance(m) {
+        if (m < 1000) return Math.round(m) + ' m';
+        return this.fmtHealthValue(m / 1000) + ' km';
+      }
       scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
 
       ic(key, color, size) {
@@ -1109,8 +1197,8 @@
           const col = COL[cat.key], sc = this.scoreColor(cat.score), hid = !!S.hidden[cat.key], open = S.open === cat.key;
           return {
             key: cat.key, label: t.cats[cat.key], count: cat.count, isOpen: open,
-            isMarket: cat.key === 'market', isSchool: cat.key === 'school',
-            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' && S.schoolInfoOpen),
+            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isNonHealth: cat.key !== 'health',
+            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' && S.healthInfoOpen)),
             icon: this.ic(cat.key, col, 19),
             iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
             scoreStr: this.fmtScore(cat.score),
@@ -1119,11 +1207,11 @@
             countStr: cat.count + ' ' + t.points,
             nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m) + ' ' + t.straightSuffix,
             marketNote: cat.key === 'market' ? t.marketNote : null,
-            hasBreakdown: (cat.key === 'market' || cat.key === 'school') && !!cat.score_breakdown,
-            proximityStr: cat.score_breakdown ? (cat.key === 'school'
+            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health') && !!cat.score_breakdown,
+            proximityStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown ? (cat.key === 'school'
               ? this.fmtSchoolBreakdownScore(cat.score_breakdown.proximity_points)
               : this.fmtScore(cat.score_breakdown.proximity_points)) : '',
-            choiceStr: cat.score_breakdown ? (cat.key === 'school'
+            choiceStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown ? (cat.key === 'school'
               ? this.fmtSchoolBreakdownScore(cat.score_breakdown.choice_points)
               : this.fmtScore(cat.score_breakdown.choice_points)) : '',
             schoolScoreStr: cat.key === 'school' ? this.fmtSchoolBreakdownScore(cat.score) : '',
@@ -1132,14 +1220,37 @@
                   ? t.schoolNearest(this.fmtDist(Math.round(cat.score_breakdown.nearest_core_school_m)))
                   : t.schoolNearestNone)
               : '',
+            clinicalProximityStr: cat.key === 'health' && cat.score_breakdown ? this.fmtHealthValue(cat.score_breakdown.clinical_proximity_points) : '',
+            healthChoiceStr: cat.key === 'health' && cat.score_breakdown ? this.fmtHealthValue(cat.score_breakdown.choice_points) : '',
+            hospitalPointsStr: cat.key === 'health' && cat.score_breakdown ? this.fmtHealthValue(cat.score_breakdown.hospital_points) : '',
+            healthScoreStr: cat.key === 'health' ? this.fmtHealthValue(cat.score) : '',
+            nearestClinicalStr: cat.key === 'health' && cat.score_breakdown
+              ? (Number.isFinite(cat.score_breakdown.nearest_clinical_m)
+                  ? t.healthNearestClinical(this.fmtHealthDistance(cat.score_breakdown.nearest_clinical_m))
+                  : t.healthNearestClinicalNone)
+              : '',
+            nearestHospitalStr: cat.key === 'health' && cat.score_breakdown
+              ? (Number.isFinite(cat.score_breakdown.nearest_hospital_m)
+                  ? t.healthNearestHospital(this.fmtHealthDistance(cat.score_breakdown.nearest_hospital_m))
+                  : t.healthNearestHospitalNone)
+              : '',
+            healthCountStr: cat.key === 'health' ? cat.count + ' ' + t.healthResults : '',
+            healthClinicalSummaryStr: cat.key === 'health' && cat.score_breakdown
+              ? (Number.isFinite(cat.score_breakdown.nearest_clinical_m)
+                  ? t.healthClinicalSummary(this.fmtHealthDistance(cat.score_breakdown.nearest_clinical_m))
+                  : t.healthClinicalSummaryNone)
+              : '',
+            healthHospitalSummaryStr: cat.key === 'health' && cat.score_breakdown
+              ? (Number.isFinite(cat.score_breakdown.nearest_hospital_m)
+                  ? t.healthHospitalSummary(this.fmtHealthDistance(cat.score_breakdown.nearest_hospital_m))
+                  : t.healthHospitalSummaryNone)
+              : '',
             toggleInfo: () => cat.key === 'school'
               ? this.setState({ schoolInfoOpen: !this.state.schoolInfoOpen })
-              : this.setState({ marketInfoOpen: !this.state.marketInfoOpen }),
+              : (cat.key === 'health'
+                  ? this.setState({ healthInfoOpen: !this.state.healthInfoOpen })
+                  : this.setState({ marketInfoOpen: !this.state.marketInfoOpen })),
             limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
-            badge: cat.key === 'health' ? (cat.has_hospital ? t.hospY : t.hospN) : null,
-            badgeStyle: cat.has_hospital
-              ? { padding: '3px 9px', borderRadius: '999px', background: this.hexA('#3E9B4F', 0.15), color: '#3E9B4F', font: '700 10.5px Manrope' }
-              : { padding: '3px 9px', borderRadius: '999px', background: this.hexA('#E8963B', 0.17), color: '#c07a22', font: '700 10.5px Manrope' },
             chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
             toggle: () => this.setState({ open: open ? null : cat.key }),
             toggleFilter: () => {
@@ -1158,7 +1269,8 @@
                 name: it.name,
                 typeStr: cat.key === 'school'
                   ? (t.schoolTypes[it.type] || it.type || '')
-                  : (it.type || ''),
+                  : (cat.key === 'health' ? (t.healthTypes[it.type] || it.type || '') : (it.type || '')),
+                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health') ? 'none' : 'capitalize' },
                 straightStr: t.straightLine + ' ' + this.fmtDist(straight),
                 walkStr: t.estimatedWalk + ' ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
                 driveStr: t.estimatedDrive + ' ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,

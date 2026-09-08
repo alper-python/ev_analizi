@@ -16,8 +16,9 @@ import pyarrow.parquet as pq
 import requests
 
 from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
-                        analyze_market, analyze_school, geocode, query_category,
-                        query_market_candidates, query_school_candidates)
+                        analyze_health, analyze_market, analyze_school, geocode,
+                        query_category, query_market_candidates,
+                        query_school_candidates)
 from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
                             deduplicate_market_pois, market_type)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, deduplicate_school_pois,
@@ -240,6 +241,16 @@ def _category_payload(con, category, lat, lon, radius, topn, score):
         frame, _school_score, count, nearest = analyze_school(
             con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
         score_breakdown = _school_score_breakdown(con, lat, lon)
+    elif category == "health":
+        frame, _health_score, count, nearest, components = analyze_health(
+            con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
+        score_breakdown = {
+            "clinical_proximity_points": components["clinical_proximity_points"],
+            "choice_points": components["choice_points"],
+            "hospital_points": components["hospital_points"],
+            "nearest_clinical_m": components["nearest_clinical_m"],
+            "nearest_hospital_m": components["nearest_hospital_m"],
+        }
     else:
         frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0

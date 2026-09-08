@@ -237,10 +237,8 @@ class MarketDeduplicationTests(unittest.TestCase):
 
 
 class NonMarketRegressionTests(unittest.TestCase):
-    def test_non_market_configuration_and_formula_are_unchanged(self):
+    def test_remaining_generic_configuration_and_formula_are_unchanged(self):
         expected = {
-            "health": {"D0": 4000, "w_prox": 7.0, "w_count": 3.0, "Nsat": 3,
-                       "bonus_if_hospital": 1.0},
             "transit": {"D0": 800, "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
             "park": {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
             "sport": {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
@@ -249,14 +247,14 @@ class NonMarketRegressionTests(unittest.TestCase):
         self.assertNotIn("market", app.SCORES)
         self.assertNotIn("school", app.SCORING)
         self.assertNotIn("school", app.SCORES)
+        self.assertNotIn("health", app.SCORING)
+        self.assertNotIn("health", app.SCORES)
         for category, config in expected.items():
             self.assertEqual(app.SCORING[category], config)
             raw = (1 - min(300, config["D0"]) / config["D0"]) * config["w_prox"]
             raw += min(2, config["Nsat"]) / config["Nsat"] * config["w_count"]
-            if category == "health":
-                raw += 1.0
             self.assertAlmostEqual(
-                app.calc_category_score(category, 2, 300, category == "health"),
+                app.calc_category_score(category, 2, 300),
                 min(10.0, raw),
             )
 

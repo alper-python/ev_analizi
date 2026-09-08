@@ -3,6 +3,9 @@ import os, math, argparse
 import duckdb, pandas as pd, folium
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
+from health_scoring import (HEALTH_HOSPITAL_RADIUS_M, HEALTH_LOCAL_RADIUS_M,
+                            deduplicate_health_local_pois,
+                            health_score_components)
 from market_scoring import (MARKET_SCORING_RADIUS_M, calc_market_score,
                             deduplicate_market_pois, market_type)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, calc_school_score,
@@ -41,9 +44,7 @@ OVERALL_WEIGHTS = {
 # D0: yakınlık doygunluk mesafesi (m)
 # w_prox + w_count = 10 (puanların dağılımı)
 # Nsat: sayıda doygunluğa ulaşılacak değer
-# bonus: opsiyonel; health için hastane varsa +1 gibi
 SCORING = {
-    "health": {"D0": 4000, "w_prox": 7.0, "w_count": 3.0, "Nsat": 3, "bonus_if_hospital": 1.0},
     "transit":{"D0": 800,  "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
     "park":   {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
     "sport":  {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
@@ -73,15 +74,6 @@ def geocode(address):
 
 # Alt-skor (tür ağırlıkları) — sıralama için; puanlamadan bağımsız
 SCORES = {
-    "health": """
-        (CASE WHEN amenity='hospital' OR healthcare='hospital' THEN 100 ELSE 0 END) +
-        (CASE WHEN amenity='clinic' OR healthcare='clinic' THEN 80 ELSE 0 END) +
-        (CASE WHEN amenity='doctors' OR healthcare='doctor' THEN 60 ELSE 0 END) +
-        (CASE WHEN amenity='dentist' OR healthcare='dentist' THEN 55 ELSE 0 END) +
-        (CASE WHEN healthcare='physiotherapist' THEN 50 ELSE 0 END) +
-        (CASE WHEN amenity='pharmacy' THEN 40 ELSE 0 END) +
-        (CASE WHEN healthcare IS NOT NULL THEN 30 ELSE 0 END)
-    """,
     "transit": """
         (CASE WHEN railway='station' THEN 100 ELSE 0 END) +
         (CASE WHEN railway='halt' THEN 90 ELSE 0 END) +
@@ -300,11 +292,140 @@ def analyze_school(con, nodes_path, polys_path, lat, lon, display_radius_m, topn
                "has_hospital_any", "walk_m", "walk_s", "drive_m", "drive_s"]
     return pd.DataFrame(output, columns=columns), school_score, n_total, d_min
 
+def health_bounding_box(lat, lon, radius_m):
+    """Return a conservative spherical bounding box for a Health radius."""
+    numeric_margin_degrees = 1e-8
+    angular_radius = float(radius_m) / 6371000.0
+    lat_radians = math.radians(float(lat))
+    lat_delta = math.degrees(angular_radius)
+    lat_min = max(-90.0, float(lat) - lat_delta)
+    lat_max = min(90.0, float(lat) + lat_delta)
+
+    if lat_min <= -90.0 or lat_max >= 90.0:
+        lon_delta = 180.0
+    else:
+        ratio = math.sin(angular_radius) / max(1e-15, math.cos(lat_radians))
+        lon_delta = 180.0 if ratio >= 1.0 else math.degrees(math.asin(ratio))
+
+    return (
+        math.nextafter(lat_min - numeric_margin_degrees, -math.inf),
+        math.nextafter(lat_max + numeric_margin_degrees, math.inf),
+        math.nextafter(float(lon) - lon_delta - numeric_margin_degrees, -math.inf),
+        math.nextafter(float(lon) + lon_delta + numeric_margin_degrees, math.inf),
+    )
+
+def query_health_candidates(con, nodes_path, polys_path, lat, lon, radius_m):
+    """Return every displayable Health row inside an exact radial query."""
+    distance_tolerance_m = 1e-6
+    lat_min, lat_max, lon_min, lon_max = health_bounding_box(
+        lat, lon, radius_m)
+    parts = []
+    if nodes_path:
+        parts.append(
+            f"SELECT name, NULL AS brand, lat, lon, amenity, shop, healthcare, "
+            f"'node' AS source FROM read_parquet('{nodes_path}') WHERE cat='health'"
+        )
+    if polys_path:
+        parts.append(
+            f"SELECT name, brand, lat, lon, amenity, shop, healthcare, "
+            f"'polygon' AS source FROM read_parquet('{polys_path}') WHERE cat='health'"
+        )
+    if not parts:
+        return []
+
+    base_src = " UNION ALL ".join(parts)
+    query = f"""
+    WITH base AS (
+      SELECT * FROM ({base_src})
+      WHERE lat BETWEEN {lat_min} AND {lat_max}
+        AND lon BETWEEN {lon_min} AND {lon_max}
+    ),
+    dist AS (
+      SELECT *,
+        2*6371000*asin(
+          sqrt(
+            sin(radians(lat - {lat})/2)*sin(radians(lat - {lat})/2) +
+            cos(radians({lat}))*cos(radians(lat))*
+            sin(radians(lon - {lon})/2)*sin(radians(lon - {lon})/2)
+          )
+        ) AS d_lin
+      FROM base
+    )
+    SELECT * FROM dist WHERE d_lin <= {float(radius_m) + distance_tolerance_m}
+    """
+    return con.execute(query).df().to_dict("records")
+
+def _health_display_rank(poi):
+    amenity = poi.get("amenity")
+    healthcare = poi.get("healthcare")
+    return (
+        (100 if amenity == "hospital" or healthcare == "hospital" else 0)
+        + (80 if amenity == "clinic" or healthcare == "clinic" else 0)
+        + (60 if amenity == "doctors" or healthcare == "doctor" else 0)
+        + (55 if amenity == "dentist" or healthcare == "dentist" else 0)
+        + (50 if healthcare == "physiotherapist" else 0)
+        + (40 if amenity == "pharmacy" else 0)
+        + (30 if pd.notnull(healthcare) else 0)
+    )
+
+def analyze_health(con, nodes_path, polys_path, lat, lon, display_radius_m, topn):
+    """Compute fixed-radius Health V1 and a display-radius result list.
+
+    ``n_total`` is the raw number of all displayable Health cache rows inside
+    the caller's display radius, before top-N. ``d_min`` is the nearest such
+    displayed-category row and is not necessarily a scoring clinical POI.
+    """
+    local_candidates = query_health_candidates(
+        con, nodes_path, polys_path, lat, lon, HEALTH_LOCAL_RADIUS_M)
+    local_scoring_rows = deduplicate_health_local_pois(local_candidates)
+    hospital_candidates = query_health_candidates(
+        con, nodes_path, polys_path, lat, lon, HEALTH_HOSPITAL_RADIUS_M)
+    components = health_score_components(local_scoring_rows, hospital_candidates)
+
+    if display_radius_m == HEALTH_LOCAL_RADIUS_M:
+        display_rows = local_candidates
+    else:
+        display_rows = query_health_candidates(
+            con, nodes_path, polys_path, lat, lon, display_radius_m)
+    display_rows.sort(key=lambda poi: (
+        float(poi["d_lin"]), str(poi.get("name") or "").casefold(),
+        str(poi.get("source") or ""), float(poi["lat"]), float(poi["lon"]),
+        str(poi.get("amenity") or ""), str(poi.get("healthcare") or "")))
+
+    n_total = len(display_rows)
+    d_min = min((float(poi["d_lin"]) for poi in display_rows), default=None)
+    has_hospital = any(
+        poi.get("amenity") == "hospital" or poi.get("healthcare") == "hospital"
+        for poi in display_rows)
+    output = []
+    for poi in display_rows[:max(0, topn)]:
+        row = dict(poi)
+        distance = float(row["d_lin"])
+        row.update({
+            "score": _health_display_rank(row),
+            "d_min": d_min,
+            "n_total": n_total,
+            "has_hospital_any": int(has_hospital),
+            "walk_m": distance * WALK_CIRCUITY,
+            "drive_m": distance * DRIVE_CIRCUITY,
+            "walk_s": (distance * WALK_CIRCUITY) / (WALK_SPEED_KPH * 1000/3600),
+            "drive_s": (distance * DRIVE_CIRCUITY) / (DRIVE_SPEED_KPH * 1000/3600),
+        })
+        output.append(row)
+
+    columns = ["name", "brand", "amenity", "shop", "healthcare", "lat", "lon",
+               "source", "score", "d_lin", "d_min", "n_total",
+               "has_hospital_any", "walk_m", "walk_s", "drive_m", "drive_s"]
+    frame = pd.DataFrame(output, columns=columns)
+    return frame, components["score"], n_total, d_min, components
+
 def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
     if cat == "market":
         raise ValueError("Market uses the dedicated analyze_market() Market Score V1 path.")
     if cat == "school":
         raise ValueError("School uses the dedicated analyze_school() School Score V1 path.")
+    if cat == "health":
+        raise ValueError("Health uses the dedicated analyze_health() Health Score V1 path.")
     dlat, dlon = meters_to_deg_latlon(lat, radius_m)
     lat_min, lat_max = lat - dlat, lat + dlat
     lon_min, lon_max = lon - dlon, lon + dlon
@@ -377,6 +498,8 @@ def calc_category_score(cat, n_total:int, d_min:float, has_hospital:bool=False) 
         raise ValueError("Market uses calc_market_score() in the dedicated Market Score V1 path.")
     if cat == "school":
         raise ValueError("School uses calc_school_score() in the dedicated School Score V1 path.")
+    if cat == "health":
+        raise ValueError("Health uses health_score_components() in the dedicated Health Score V1 path.")
     # Kategoriye göre konfig
     cfg = SCORING[cat]
     D0 = cfg["D0"]
@@ -396,10 +519,6 @@ def calc_category_score(cat, n_total:int, d_min:float, has_hospital:bool=False) 
     count_pts = count_norm * w_count
 
     score = prox_pts + count_pts
-
-    # sağlıkta hastane bonusu (varsa)
-    if cat == "health" and has_hospital and "bonus_if_hospital" in cfg:
-        score += cfg["bonus_if_hospital"]
 
     # 0..10 aralığına kırp
     return max(0.0, min(10.0, score))
@@ -449,6 +568,9 @@ def main():
                 con, nodes_path, polys_path, lat, lon, args.radius, args.topn)
         elif cat == "school":
             df, dedicated_score, _, _ = analyze_school(
+                con, nodes_path, polys_path, lat, lon, args.radius, args.topn)
+        elif cat == "health":
+            df, dedicated_score, _, _, _ = analyze_health(
                 con, nodes_path, polys_path, lat, lon, args.radius, args.topn)
         else:
             df = query_category(con, nodes_path, polys_path, cat, lat, lon, args.radius, args.topn)
@@ -584,6 +706,11 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 lat, lon, radius, topn)
         elif cat == "school":
             df, dedicated_score, _, _ = analyze_school(
+                con, nodes_path if nodes_ok else None,
+                polys_path if polys_ok else None,
+                lat, lon, radius, topn)
+        elif cat == "health":
+            df, dedicated_score, _, _, _ = analyze_health(
                 con, nodes_path if nodes_ok else None,
                 polys_path if polys_ok else None,
                 lat, lon, radius, topn)

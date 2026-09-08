@@ -294,8 +294,6 @@ class SchoolOrchestrationTests(unittest.TestCase):
 
     def test_non_school_scoring_configuration_and_formulas_are_unchanged(self):
         expected = {
-            "health": {"D0": 4000, "w_prox": 7.0, "w_count": 3.0, "Nsat": 3,
-                       "bonus_if_hospital": 1.0},
             "transit": {"D0": 800, "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
             "park": {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
             "sport": {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
@@ -304,10 +302,8 @@ class SchoolOrchestrationTests(unittest.TestCase):
         for category, config in expected.items():
             raw = (1 - 300 / config["D0"]) * config["w_prox"]
             raw += min(2, config["Nsat"]) / config["Nsat"] * config["w_count"]
-            if category == "health":
-                raw += 1
             self.assertAlmostEqual(
-                app.calc_category_score(category, 2, 300, category == "health"),
+                app.calc_category_score(category, 2, 300),
                 min(10.0, raw))
         market_row = {"name": "Market", "brand": None, "lat": 50.0, "lon": 4.0,
                       "amenity": None, "shop": "supermarket", "source": "node",
