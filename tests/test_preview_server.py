@@ -155,6 +155,79 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         )
         self.assertEqual(breakdown["final_score"], market["score"])
 
+    def test_school_uses_dedicated_path_and_keeps_api_shape(self):
+        schools = [next(cat for cat in self.analyze(radius)["categories"]
+                        if cat["key"] == "school")
+                   for radius in (1000, 2500, 5000)]
+
+        self.assertEqual([category["score"] for category in schools],
+                         [schools[0]["score"]] * 3)
+        breakdowns = [category["score_breakdown"] for category in schools]
+        self.assertEqual(breakdowns, [breakdowns[0]] * 3)
+        self.assertEqual(set(breakdowns[0]), {
+            "proximity_points", "choice_points", "nearest_core_school_m",
+        })
+        self.assertAlmostEqual(
+            breakdowns[0]["proximity_points"] + breakdowns[0]["choice_points"],
+            schools[0]["score"], places=1)
+        self.assertEqual(
+            [[item["type"] for item in category["items"]] for category in schools],
+            [["school", "kindergarten"]] * 3,
+        )
+
+    def test_school_nearest_core_distance_ignores_nearer_kindergarten(self):
+        candidates = [
+            {"name": "Near Kindergarten", "amenity": "kindergarten", "lat": 50.0,
+             "lon": 4.0, "source": "node", "d_lin": 100.0},
+            {"name": "Core School", "amenity": "school", "lat": 50.001,
+             "lon": 4.0, "source": "node", "d_lin": 500.0},
+        ]
+        with patch.object(server, "query_school_candidates", return_value=candidates):
+            breakdown = server._school_score_breakdown(object(), 50.0, 4.0)
+        self.assertEqual(breakdown["nearest_core_school_m"], 500.0)
+
+
+class SchoolExplanationContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(encoding="utf-8")
+
+    def test_school_explanation_exists_in_all_languages(self):
+        for text in (
+            "Okul skoru her zaman 2,5 km yarıçapındaki eğitim noktalarına göre hesaplanır.",
+            "The School score is always calculated using education options within a 2.5 km radius.",
+            "De schoolscore wordt altijd berekend op basis van onderwijsvoorzieningen binnen een straal van 2,5 km.",
+            "Anaokulları yakınlık puanını belirlemez",
+            "Kindergartens do not determine proximity points",
+            "Kleuterscholen bepalen de nabijheidsscore niet",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_market_explanation_text_remains_unchanged(self):
+        for text in (
+            "Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır.",
+            "The Market score is always calculated using grocery options within 2.5 km of the address.",
+            "De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_school_poi_types_are_translated_in_all_languages(self):
+        for mapping in (
+            "schoolTypes: { school: 'Okul', kindergarten: 'Anaokulu' }",
+            "schoolTypes: { school: 'School', kindergarten: 'Kindergarten' }",
+            "schoolTypes: { school: 'School', kindergarten: 'Kleuterschool' }",
+        ):
+            self.assertIn(mapping, self.frontend)
+
+    def test_school_type_translation_is_reactive_and_has_raw_fallback(self):
+        self.assertIn(
+            "? (t.schoolTypes[it.type] || it.type || '')",
+            self.frontend,
+        )
+
+    def test_non_school_poi_types_keep_existing_raw_rendering(self):
+        self.assertIn(": (it.type || ''),", self.frontend)
+
 
 if __name__ == "__main__":
     unittest.main()

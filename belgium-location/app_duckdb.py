@@ -5,6 +5,8 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 from market_scoring import (MARKET_SCORING_RADIUS_M, calc_market_score,
                             deduplicate_market_pois, market_type)
+from school_scoring import (SCHOOL_SCORING_RADIUS_M, calc_school_score,
+                            deduplicate_school_pois)
 
 # ========== KULLANICI AYARLANABİLİR PARAMETRELER ==========
 
@@ -41,7 +43,6 @@ OVERALL_WEIGHTS = {
 # Nsat: sayıda doygunluğa ulaşılacak değer
 # bonus: opsiyonel; health için hastane varsa +1 gibi
 SCORING = {
-    "school": {"D0": 2000, "w_prox": 5.0, "w_count": 5.0, "Nsat": 4},
     "health": {"D0": 4000, "w_prox": 7.0, "w_count": 3.0, "Nsat": 3, "bonus_if_hospital": 1.0},
     "transit":{"D0": 800,  "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
     "park":   {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
@@ -72,13 +73,6 @@ def geocode(address):
 
 # Alt-skor (tür ağırlıkları) — sıralama için; puanlamadan bağımsız
 SCORES = {
-    "school": """
-        (CASE WHEN amenity='school' THEN 10 ELSE 0 END) +
-        (CASE WHEN amenity='college' THEN 7 ELSE 0 END) +
-        (CASE WHEN amenity='kindergarten' THEN 6 ELSE 0 END) +
-        (CASE WHEN "school_level" IS NOT NULL THEN 4 ELSE 0 END) +
-        (CASE WHEN "isced_level" IS NOT NULL THEN 4 ELSE 0 END)
-    """,
     "health": """
         (CASE WHEN amenity='hospital' OR healthcare='hospital' THEN 100 ELSE 0 END) +
         (CASE WHEN amenity='clinic' OR healthcare='clinic' THEN 80 ELSE 0 END) +
@@ -200,9 +194,117 @@ def analyze_market(con, nodes_path, polys_path, lat, lon, display_radius_m, topn
                "walk_m", "walk_s", "drive_m", "drive_s"]
     return pd.DataFrame(output, columns=columns), market_score, n_total, d_min
 
+def school_bounding_box(lat, lon, radius_m):
+    """Return a conservative spherical bounding box for a radius in metres."""
+    angular_radius = float(radius_m) / 6371000.0
+    lat_radians = math.radians(float(lat))
+    lat_delta = math.degrees(angular_radius)
+    lat_min = max(-90.0, float(lat) - lat_delta)
+    lat_max = min(90.0, float(lat) + lat_delta)
+
+    if lat_min <= -90.0 or lat_max >= 90.0:
+        lon_delta = 180.0
+    else:
+        ratio = math.sin(angular_radius) / max(1e-15, math.cos(lat_radians))
+        lon_delta = 180.0 if ratio >= 1.0 else math.degrees(math.asin(ratio))
+
+    return (
+        math.nextafter(lat_min, -math.inf),
+        math.nextafter(lat_max, math.inf),
+        math.nextafter(float(lon) - lon_delta, -math.inf),
+        math.nextafter(float(lon) + lon_delta, math.inf),
+    )
+
+def query_school_candidates(con, nodes_path, polys_path, lat, lon, radius_m):
+    """Return explicit school/kindergarten rows for School's isolated pipeline."""
+    lat_min, lat_max, lon_min, lon_max = school_bounding_box(
+        lat, lon, radius_m)
+
+    parts = []
+    if nodes_path:
+        parts.append(
+            f"SELECT name, NULL AS brand, lat, lon, amenity, shop, healthcare, "
+            f"school_level, isced_level, 'node' AS source "
+            f"FROM read_parquet('{nodes_path}') WHERE cat='school' "
+            f"AND amenity IN ('school', 'kindergarten')"
+        )
+    if polys_path:
+        parts.append(
+            f"SELECT name, brand, lat, lon, amenity, shop, healthcare, "
+            f"school_level, isced_level, 'polygon' AS source "
+            f"FROM read_parquet('{polys_path}') WHERE cat='school' "
+            f"AND amenity IN ('school', 'kindergarten')"
+        )
+    if not parts:
+        return []
+
+    base_src = " UNION ALL ".join(parts)
+    q = f"""
+    WITH base AS (
+      SELECT * FROM ({base_src})
+      WHERE lat BETWEEN {lat_min} AND {lat_max}
+        AND lon BETWEEN {lon_min} AND {lon_max}
+    ),
+    dist AS (
+      SELECT *,
+        2*6371000*asin(
+          sqrt(
+            sin(radians(lat - {lat})/2)*sin(radians(lat - {lat})/2) +
+            cos(radians({lat}))*cos(radians(lat))*
+            sin(radians(lon - {lon})/2)*sin(radians(lon - {lon})/2)
+          )
+        ) AS d_lin
+      FROM base
+    )
+    SELECT * FROM dist WHERE d_lin <= {radius_m}
+    """
+    return con.execute(q).df().to_dict("records")
+
+def analyze_school(con, nodes_path, polys_path, lat, lon, display_radius_m, topn):
+    """Compute a fixed-radius School score and display-radius result list."""
+    scoring_rows = deduplicate_school_pois(query_school_candidates(
+        con, nodes_path, polys_path, lat, lon, SCHOOL_SCORING_RADIUS_M))
+    school_score = calc_school_score(scoring_rows)
+
+    if display_radius_m == SCHOOL_SCORING_RADIUS_M:
+        display_rows = scoring_rows
+    else:
+        display_rows = deduplicate_school_pois(query_school_candidates(
+            con, nodes_path, polys_path, lat, lon, display_radius_m))
+
+    display_rows.sort(key=lambda p: (
+        float(p["d_lin"]), str(p.get("name") or "").casefold(),
+        str(p.get("amenity") or ""), str(p.get("source") or ""),
+        float(p["lat"]), float(p["lon"])))
+    n_total = len(display_rows)
+    d_min = min((float(p["d_lin"]) for p in display_rows), default=None)
+
+    output = []
+    for poi in display_rows[:max(0, topn)]:
+        row = dict(poi)
+        distance = float(row["d_lin"])
+        row.update({
+            "score": 10 if row.get("amenity") == "school" else 4,
+            "d_min": d_min,
+            "n_total": n_total,
+            "has_hospital_any": 0,
+            "walk_m": distance * WALK_CIRCUITY,
+            "drive_m": distance * DRIVE_CIRCUITY,
+            "walk_s": (distance * WALK_CIRCUITY) / (WALK_SPEED_KPH * 1000/3600),
+            "drive_s": (distance * DRIVE_CIRCUITY) / (DRIVE_SPEED_KPH * 1000/3600),
+        })
+        output.append(row)
+
+    columns = ["name", "brand", "amenity", "shop", "healthcare", "lat", "lon",
+               "school_level", "isced_level", "score", "d_lin", "d_min", "n_total",
+               "has_hospital_any", "walk_m", "walk_s", "drive_m", "drive_s"]
+    return pd.DataFrame(output, columns=columns), school_score, n_total, d_min
+
 def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
     if cat == "market":
         raise ValueError("Market uses the dedicated analyze_market() Market Score V1 path.")
+    if cat == "school":
+        raise ValueError("School uses the dedicated analyze_school() School Score V1 path.")
     dlat, dlon = meters_to_deg_latlon(lat, radius_m)
     lat_min, lat_max = lat - dlat, lat + dlat
     lon_min, lon_max = lon - dlon, lon + dlon
@@ -273,6 +375,8 @@ def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
 def calc_category_score(cat, n_total:int, d_min:float, has_hospital:bool=False) -> float:
     if cat == "market":
         raise ValueError("Market uses calc_market_score() in the dedicated Market Score V1 path.")
+    if cat == "school":
+        raise ValueError("School uses calc_school_score() in the dedicated School Score V1 path.")
     # Kategoriye göre konfig
     cfg = SCORING[cat]
     D0 = cfg["D0"]
@@ -339,16 +443,19 @@ def main():
     summary_rows=[]  # kategori scorecard için
 
     for cat in CATS.keys():
-        market_score = None
+        dedicated_score = None
         if cat == "market":
-            df, market_score, _, _ = analyze_market(
+            df, dedicated_score, _, _ = analyze_market(
+                con, nodes_path, polys_path, lat, lon, args.radius, args.topn)
+        elif cat == "school":
+            df, dedicated_score, _, _ = analyze_school(
                 con, nodes_path, polys_path, lat, lon, args.radius, args.topn)
         else:
             df = query_category(con, nodes_path, polys_path, cat, lat, lon, args.radius, args.topn)
         label = CATS[cat]["label"]
         if df.empty:
             print(f"\n— {label} (sonuç yok)")
-            score = market_score if market_score is not None else 0.0
+            score = dedicated_score if dedicated_score is not None else 0.0
             cat_scores[cat] = score
             summary_rows.append((label, score, 0, None, False))
             continue
@@ -365,7 +472,7 @@ def main():
         d_min   = float(df.iloc[0]["d_min"]) if pd.notnull(df.iloc[0]["d_min"]) else None
         has_hospital = bool(df.iloc[0]["has_hospital_any"]) if "has_hospital_any" in df.columns else False
 
-        score = market_score if market_score is not None else calc_category_score(cat, n_total, d_min, has_hospital)
+        score = dedicated_score if dedicated_score is not None else calc_category_score(cat, n_total, d_min, has_hospital)
         cat_scores[cat] = score
         summary_rows.append((label, score, n_total, d_min, has_hospital))
 
@@ -469,9 +576,14 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
     summary_rows = []
 
     for cat in CATS.keys():
-        market_score = None
+        dedicated_score = None
         if cat == "market":
-            df, market_score, _, _ = analyze_market(
+            df, dedicated_score, _, _ = analyze_market(
+                con, nodes_path if nodes_ok else None,
+                polys_path if polys_ok else None,
+                lat, lon, radius, topn)
+        elif cat == "school":
+            df, dedicated_score, _, _ = analyze_school(
                 con, nodes_path if nodes_ok else None,
                 polys_path if polys_ok else None,
                 lat, lon, radius, topn)
@@ -481,7 +593,7 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                                 cat, lat, lon, radius, topn)
         label = CATS[cat]["label"]
         if df.empty:
-            score = market_score if market_score is not None else 0.0
+            score = dedicated_score if dedicated_score is not None else 0.0
             cat_scores[cat] = score
             summary_rows.append((label, score, 0, None, False))
             continue
@@ -489,7 +601,7 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
         n_total = int(df.iloc[0]["n_total"])
         d_min   = float(df.iloc[0]["d_min"]) if pd.notnull(df.iloc[0]["d_min"]) else None
         has_hospital = bool(df.iloc[0]["has_hospital_any"]) if "has_hospital_any" in df.columns else False
-        score = market_score if market_score is not None else calc_category_score(cat, n_total, d_min, has_hospital)
+        score = dedicated_score if dedicated_score is not None else calc_category_score(cat, n_total, d_min, has_hospital)
         cat_scores[cat] = score
         summary_rows.append((label, score, n_total, d_min, has_hospital))
 
@@ -551,13 +663,16 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 continue
             rows = []
             for _, r in sub.iterrows():
-                rows.append({
+                item = {
                     "name": r["name"],
                     "walk_m": fmt_meters(r["walk_m"]),
                     "walk_s": fmt_seconds(r["walk_s"]),
                     "drive_m": fmt_meters(r["drive_m"]),
                     "drive_s": fmt_seconds(r["drive_s"]),
-                })
+                }
+                if cat == "school":
+                    item["type"] = r["amenity"]
+                rows.append(item)
             results_by_cat[cat] = rows
     else:
         for cat in CATS.keys():

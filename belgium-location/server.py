@@ -16,10 +16,12 @@ import pyarrow.parquet as pq
 import requests
 
 from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
-                        analyze_market, geocode, query_category,
-                        query_market_candidates)
+                        analyze_market, analyze_school, geocode, query_category,
+                        query_market_candidates, query_school_candidates)
 from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
                             deduplicate_market_pois, market_type)
+from school_scoring import (SCHOOL_SCORING_RADIUS_M, deduplicate_school_pois,
+                            school_score_components)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -217,11 +219,27 @@ def _market_score_breakdown(con, lat, lon, score):
     }
 
 
+def _school_score_breakdown(con, lat, lon):
+    """Expose centrally calculated School Score V1 components to the UI."""
+    scoring_rows = deduplicate_school_pois(query_school_candidates(
+        con, NODES_PATH, POLYS_PATH, lat, lon, SCHOOL_SCORING_RADIUS_M))
+    components = school_score_components(scoring_rows)
+    return {
+        "proximity_points": components["proximity_points"],
+        "choice_points": components["choice_points"],
+        "nearest_core_school_m": components["nearest_school_distance"],
+    }
+
+
 def _category_payload(con, category, lat, lon, radius, topn, score):
     if category == "market":
         frame, _market_score, count, nearest = analyze_market(
             con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
         score_breakdown = _market_score_breakdown(con, lat, lon, score)
+    elif category == "school":
+        frame, _school_score, count, nearest = analyze_school(
+            con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
+        score_breakdown = _school_score_breakdown(con, lat, lon)
     else:
         frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0

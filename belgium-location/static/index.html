@@ -480,6 +480,27 @@
                                                 </sc-if>
                                             </div>
                                         </sc-if>
+                                        <sc-if value="{{ cat.isSchool }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:0 16px 11px 66px">
+                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.schoolHow }}</button>
+                                                <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                        <div>{{ t.schoolNote }}</div>
+                                                        <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
+                                                            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:9px 0">
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.proximityLabel }}</span><strong style="color:var(--ink)">{{ cat.proximityStr }} / 7</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.schoolChoiceLabel }}</span><strong style="color:var(--ink)">{{ cat.choiceStr }} / 3</strong></div>
+                                                                <div style="padding:7px;border:1px solid var(--line);border-radius:7px"><span style="display:block">{{ t.schoolTotalLabel }}</span><strong style="color:var(--ink)">{{ cat.schoolScoreStr }} / 10</strong></div>
+                                                            </div>
+                                                            <div style="font-weight:700;color:var(--ink);margin-bottom:6px">{{ cat.nearestCoreStr }}</div>
+                                                        </sc-if>
+                                                        <div>{{ t.schoolProximityNote }}</div>
+                                                        <div style="margin-top:5px">{{ t.schoolKindergartenNote }}</div>
+                                                        <div style="margin-top:5px">{{ t.schoolRadiusNote }}</div>
+                                                    </div>
+                                                </sc-if>
+                                            </div>
+                                        </sc-if>
                                         <sc-if value="{{ cat.isOpen }}" hint-placeholder-val="{{ false }}">
                                             <div style="border-top:1px solid var(--line)">
                                                 <sc-if value="{{ cat.limitNote }}" hint-placeholder-val="{{ false }}">
@@ -618,7 +639,7 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false, radiusInfoOpen: false,
+          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, radiusInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -655,11 +676,19 @@
             errServerT: 'Sunucu hatası', errServerD: 'Analiz servisine şu anda ulaşılamıyor. Birkaç saniye sonra tekrar deneyin.',
             errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
-            marketHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
+            schoolTypes: { school: 'Okul', kindergarten: 'Anaokulu' },
+            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
             radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
             proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
             marketChoiceNote: 'Yeterli sayıda market seçeneğine ulaşıldığında ek mağazalar seçenek puanını artırmaya devam etmez; güçlü bir market seçeneğine yakınlık fark yaratır.',
+            schoolNote: 'Okul skoru her zaman 2,5 km yarıçapındaki eğitim noktalarına göre hesaplanır.',
+            schoolProximityNote: 'Yakınlık puanı yalnızca en yakın okulun kuş uçuşu mesafesine göre hesaplanır.',
+            schoolKindergartenNote: 'Anaokulları yakınlık puanını belirlemez; yalnızca seçenek puanına daha düşük ağırlıkla katkı sağlar.',
+            schoolRadiusNote: 'Gösterim yarıçapını değiştirmek haritadaki ve listedeki sonuçları değiştirir, okul skorunu değiştirmez.',
+            schoolChoiceLabel: 'Yakındaki seçenekler', schoolTotalLabel: 'Toplam',
+            schoolNearest: dist => 'En yakın okul: ' + dist + ' kuş uçuşu',
+            schoolNearestNone: 'En yakın okul: 2,5 km içinde bulunamadı',
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -692,11 +721,19 @@
             errServerT: 'Server error', errServerD: 'The analysis service is currently unreachable. Please try again in a few seconds.',
             errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
-            marketHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
+            schoolTypes: { school: 'School', kindergarten: 'Kindergarten' },
+            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
             radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
             proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
             marketChoiceNote: 'Once there are enough grocery options, additional stores no longer increase the choice points; proximity to a strong grocery option then makes the difference.',
+            schoolNote: 'The School score is always calculated using education options within a 2.5 km radius.',
+            schoolProximityNote: 'Proximity points are based only on the straight-line distance to the nearest school.',
+            schoolKindergartenNote: 'Kindergartens do not determine proximity points; they contribute to choice points with a lower weighting.',
+            schoolRadiusNote: 'Changing the display radius changes the results on the map and in the list, but does not change the School score.',
+            schoolChoiceLabel: 'Nearby options', schoolTotalLabel: 'Total',
+            schoolNearest: dist => 'Nearest school: ' + dist + ' straight-line',
+            schoolNearestNone: 'Nearest school: none within 2.5 km',
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -729,11 +766,19 @@
             errServerT: 'Serverfout', errServerD: 'De analysedienst is momenteel niet bereikbaar. Probeer het over enkele seconden opnieuw.',
             errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
-            marketHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
+            schoolTypes: { school: 'School', kindergarten: 'Kleuterschool' },
+            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
             radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
             proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
             marketChoiceNote: 'Zodra er genoeg winkelopties zijn, verhogen extra winkels de keuzepunten niet verder; de nabijheid van een sterke winkeloptie maakt dan het verschil.',
+            schoolNote: 'De schoolscore wordt altijd berekend op basis van onderwijsvoorzieningen binnen een straal van 2,5 km.',
+            schoolProximityNote: 'De nabijheidsscore wordt uitsluitend bepaald door de hemelsbrede afstand tot de dichtstbijzijnde school.',
+            schoolKindergartenNote: 'Kleuterscholen bepalen de nabijheidsscore niet; ze dragen alleen met een lager gewicht bij aan de keuzepunten.',
+            schoolRadiusNote: 'Als u de weergavestraal wijzigt, veranderen de resultaten op de kaart en in de lijst, maar niet de schoolscore.',
+            schoolChoiceLabel: 'Opties in de buurt', schoolTotalLabel: 'Totaal',
+            schoolNearest: dist => 'Dichtstbijzijnde school: ' + dist + ' hemelsbreed',
+            schoolNearestNone: 'Dichtstbijzijnde school: geen binnen 2,5 km',
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -815,6 +860,7 @@
 
       fmtDist(m) { return m < 1000 ? m + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
       fmtScore(s) { return s.toFixed(1).replace('.', ','); }
+      fmtSchoolBreakdownScore(s) { const value = s.toFixed(1); return this.state.lang === 'en' ? value : value.replace('.', ','); }
       scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
 
       ic(key, color, size) {
@@ -1063,7 +1109,8 @@
           const col = COL[cat.key], sc = this.scoreColor(cat.score), hid = !!S.hidden[cat.key], open = S.open === cat.key;
           return {
             key: cat.key, label: t.cats[cat.key], count: cat.count, isOpen: open,
-            isMarket: cat.key === 'market', infoOpen: cat.key === 'market' && S.marketInfoOpen,
+            isMarket: cat.key === 'market', isSchool: cat.key === 'school',
+            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' && S.schoolInfoOpen),
             icon: this.ic(cat.key, col, 19),
             iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
             scoreStr: this.fmtScore(cat.score),
@@ -1072,10 +1119,22 @@
             countStr: cat.count + ' ' + t.points,
             nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m) + ' ' + t.straightSuffix,
             marketNote: cat.key === 'market' ? t.marketNote : null,
-            hasBreakdown: cat.key === 'market' && !!cat.score_breakdown,
-            proximityStr: cat.score_breakdown ? this.fmtScore(cat.score_breakdown.proximity_points) : '',
-            choiceStr: cat.score_breakdown ? this.fmtScore(cat.score_breakdown.choice_points) : '',
-            toggleInfo: () => this.setState({ marketInfoOpen: !this.state.marketInfoOpen }),
+            hasBreakdown: (cat.key === 'market' || cat.key === 'school') && !!cat.score_breakdown,
+            proximityStr: cat.score_breakdown ? (cat.key === 'school'
+              ? this.fmtSchoolBreakdownScore(cat.score_breakdown.proximity_points)
+              : this.fmtScore(cat.score_breakdown.proximity_points)) : '',
+            choiceStr: cat.score_breakdown ? (cat.key === 'school'
+              ? this.fmtSchoolBreakdownScore(cat.score_breakdown.choice_points)
+              : this.fmtScore(cat.score_breakdown.choice_points)) : '',
+            schoolScoreStr: cat.key === 'school' ? this.fmtSchoolBreakdownScore(cat.score) : '',
+            nearestCoreStr: cat.key === 'school' && cat.score_breakdown
+              ? (Number.isFinite(cat.score_breakdown.nearest_core_school_m)
+                  ? t.schoolNearest(this.fmtDist(Math.round(cat.score_breakdown.nearest_core_school_m)))
+                  : t.schoolNearestNone)
+              : '',
+            toggleInfo: () => cat.key === 'school'
+              ? this.setState({ schoolInfoOpen: !this.state.schoolInfoOpen })
+              : this.setState({ marketInfoOpen: !this.state.marketInfoOpen }),
             limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
             badge: cat.key === 'health' ? (cat.has_hospital ? t.hospY : t.hospN) : null,
             badgeStyle: cat.has_hospital
@@ -1097,7 +1156,9 @@
               const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
               return {
                 name: it.name,
-                typeStr: it.type || '',
+                typeStr: cat.key === 'school'
+                  ? (t.schoolTypes[it.type] || it.type || '')
+                  : (it.type || ''),
                 straightStr: t.straightLine + ' ' + this.fmtDist(straight),
                 walkStr: t.estimatedWalk + ' ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
                 driveStr: t.estimatedDrive + ' ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,

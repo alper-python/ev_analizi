@@ -14,11 +14,15 @@ MARKET_SPEC = importlib.util.spec_from_file_location(
     "market_scoring", SOURCE_DIR / "market_scoring.py")
 market = importlib.util.module_from_spec(MARKET_SPEC)
 MARKET_SPEC.loader.exec_module(market)
+SCHOOL_SPEC = importlib.util.spec_from_file_location(
+    "school_scoring", SOURCE_DIR / "school_scoring.py")
+school = importlib.util.module_from_spec(SCHOOL_SPEC)
+SCHOOL_SPEC.loader.exec_module(school)
 
 
 def _load_app_without_leaking_optional_stubs():
     """Load the app, stubbing only missing dependencies and restoring sys.modules."""
-    stubs = {"market_scoring": market}
+    stubs = {"market_scoring": market, "school_scoring": school}
     stubbed_names = []
     for module_name in ("duckdb", "folium"):
         if importlib.util.find_spec(module_name) is None:
@@ -235,7 +239,6 @@ class MarketDeduplicationTests(unittest.TestCase):
 class NonMarketRegressionTests(unittest.TestCase):
     def test_non_market_configuration_and_formula_are_unchanged(self):
         expected = {
-            "school": {"D0": 2000, "w_prox": 5.0, "w_count": 5.0, "Nsat": 4},
             "health": {"D0": 4000, "w_prox": 7.0, "w_count": 3.0, "Nsat": 3,
                        "bonus_if_hospital": 1.0},
             "transit": {"D0": 800, "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
@@ -244,6 +247,8 @@ class NonMarketRegressionTests(unittest.TestCase):
         }
         self.assertNotIn("market", app.SCORING)
         self.assertNotIn("market", app.SCORES)
+        self.assertNotIn("school", app.SCORING)
+        self.assertNotIn("school", app.SCORES)
         for category, config in expected.items():
             self.assertEqual(app.SCORING[category], config)
             raw = (1 - min(300, config["D0"]) / config["D0"]) * config["w_prox"]
