@@ -51,7 +51,8 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_missing_api_key_is_reported_without_breaking_preview(self):
-        with patch.object(server, "ADDRESS_PROVIDER", None):
+        with (patch.object(server, "ADDRESS_PROVIDER", None),
+              patch.dict(server.os.environ, {}, clear=True)):
             response = self.client.get("/api/address-suggestions?q=Leuven&lang=nl")
         payload = response.get_json()
         self.assertEqual(response.status_code, 200)
@@ -83,7 +84,88 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["filter"], "countrycode:be")
         self.assertEqual(calls[0][1]["lang"], "en")
         self.assertEqual(calls[0][1]["limit"], 6)
+        self.assertEqual(calls[0][1]["format"], "json")
         self.assertEqual(calls[0][1]["apiKey"], "server-secret")
+
+    def test_json_results_preserve_multiple_frontend_contract_entries(self):
+        provider = server.GeoapifyAddressSuggestionProvider(
+            "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"results": [
+                {"formatted": "Gijmelstraat 56, 3200 Aarschot, Belgium",
+                 "lat": 51.0034977, "lon": 4.8405107, "result_type": "building"},
+                {"formatted": "Gijmelstraat, 3200 Aarschot, Belgium",
+                 "lat": "51.003", "lon": "4.841", "result_type": "street"},
+            ]}))
+        with patch.object(server, "ADDRESS_PROVIDER", provider):
+            response = self.client.get(
+                "/api/address-suggestions?q=Gijmelstraat%2056&lang=tr")
+        payload = response.get_json()
+        self.assertTrue(payload["available"])
+        self.assertEqual(len(payload["suggestions"]), 2)
+        self.assertEqual(payload["suggestions"][0], {
+            "label": "Gijmelstraat 56, 3200 Aarschot, Belgium",
+            "lat": 51.0034977, "lon": 4.8405107, "result_type": "building",
+        })
+
+    def test_empty_results_are_available_but_have_no_suggestions(self):
+        provider = server.GeoapifyAddressSuggestionProvider(
+            "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"results": []}))
+        with patch.object(server, "ADDRESS_PROVIDER", provider):
+            response = self.client.get("/api/address-suggestions?q=NoMatch&lang=en")
+        self.assertEqual(response.get_json(), {"available": True, "suggestions": []})
+
+    def test_malformed_result_entries_are_skipped_without_crashing(self):
+        provider = server.GeoapifyAddressSuggestionProvider(
+            "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"results": [
+                None, "wrong", {"formatted": "Missing coordinates"},
+                {"formatted": "Valid", "lat": 50.1, "lon": 4.1},
+            ]}))
+        with patch.object(server, "ADDRESS_PROVIDER", provider):
+            response = self.client.get("/api/address-suggestions?q=Valid&lang=nl")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["suggestions"], [{
+            "label": "Valid", "lat": 50.1, "lon": 4.1,
+            "result_type": "unknown",
+        }])
+
+    def test_geojson_properties_are_supported_safely(self):
+        provider = server.GeoapifyAddressSuggestionProvider(
+            "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"features": [
+                {"type": "Feature", "properties": {
+                    "formatted": "Leuven, Belgium", "lat": 50.88,
+                    "lon": 4.70, "result_type": "city"}},
+            ]}))
+        self.assertEqual(provider.suggest("Leuven", "en"), [{
+            "label": "Leuven, Belgium", "lat": 50.88, "lon": 4.70,
+            "result_type": "city",
+        }])
+
+    def test_key_configured_after_import_is_resolved_at_request_time(self):
+        provider = FakeProvider([{"label": "Late key result", "lat": 51.0,
+                                  "lon": 4.8, "result_type": "building"}])
+        with (patch.object(server, "ADDRESS_PROVIDER", None),
+              patch.dict(server.os.environ, {"GEOAPIFY_API_KEY": "late-key"},
+                         clear=True),
+              patch.object(server, "GeoapifyAddressSuggestionProvider",
+                           return_value=provider) as provider_class):
+            response = self.client.get("/api/address-suggestions?q=Gijmelstraat&lang=tr")
+        self.assertTrue(response.get_json()["available"])
+        provider_class.assert_called_once_with("late-key")
+
+    def test_upstream_failure_is_safe_and_never_exposes_api_key(self):
+        secret = "secret-must-not-leak"
+
+        def failing_get(*_args, **_kwargs):
+            raise server.requests.ConnectionError("request failed with " + secret)
+
+        provider = server.GeoapifyAddressSuggestionProvider(secret, http_get=failing_get)
+        with (patch.object(server, "ADDRESS_PROVIDER", provider),
+              self.assertLogs(server.LOGGER, level="WARNING") as logs):
+            response = self.client.get("/api/address-suggestions?q=Gijmelstraat&lang=en")
+        payload = response.get_json()
+        self.assertFalse(payload["available"])
+        self.assertEqual(payload["suggestions"], [])
+        self.assertNotIn(secret, response.get_data(as_text=True))
+        self.assertNotIn(secret, "\n".join(logs.output))
 
 
 class RadiusReanalysisApiTests(unittest.TestCase):

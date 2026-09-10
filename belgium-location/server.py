@@ -1,6 +1,7 @@
 """Local-only Flask preview for the current analysis implementation."""
 
 import atexit
+import logging
 import math
 import os
 from pathlib import Path
@@ -26,6 +27,7 @@ from school_scoring import (SCHOOL_SCORING_RADIUS_M, deduplicate_school_pois,
 
 
 BASE_DIR = Path(__file__).resolve().parent
+LOGGER = logging.getLogger(__name__)
 DEMO_LAT, DEMO_LON = 50.876182, 4.680335
 SUPPORTED_LANGS = ("tr", "en", "nl")
 LABELS = {
@@ -73,8 +75,23 @@ class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
             timeout=6,
         )
         response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Geoapify response must be a JSON object")
+        items = payload.get("results")
+        if items is None:
+            features = payload.get("features", [])
+            if not isinstance(features, list):
+                raise ValueError("Geoapify features must be a list")
+            items = [feature.get("properties") for feature in features
+                     if isinstance(feature, dict)]
+        if not isinstance(items, list):
+            raise ValueError("Geoapify results must be a list")
+
         suggestions = []
-        for item in response.json().get("results", []):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
             try:
                 label = str(item.get("formatted") or item.get("address_line1") or "").strip()
                 lat, lon = float(item["lat"]), float(item["lon"])
@@ -93,8 +110,17 @@ class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
         return suggestions
 
 
-_geoapify_key = os.environ.get("GEOAPIFY_API_KEY", "").strip()
-ADDRESS_PROVIDER = GeoapifyAddressSuggestionProvider(_geoapify_key) if _geoapify_key else None
+# Test/extension seam. Normal requests construct the provider from the current
+# environment so a key configured after process startup is not frozen at import.
+ADDRESS_PROVIDER = None
+
+
+def _current_address_provider():
+    """Resolve a late-configured key without exposing it or freezing startup state."""
+    if ADDRESS_PROVIDER is not None:
+        return ADDRESS_PROVIDER
+    api_key = os.environ.get("GEOAPIFY_API_KEY", "").strip()
+    return GeoapifyAddressSuggestionProvider(api_key) if api_key else None
 
 
 def _existing_cache(env_name, filename):
@@ -314,15 +340,18 @@ def address_suggestions_api():
     if lang not in SUPPORTED_LANGS:
         return jsonify({"error": "Unsupported language."}), 400
     query = str(request.args.get("q", "")).strip()
+    provider = _current_address_provider()
     if len(query) < 3:
-        return jsonify({"available": ADDRESS_PROVIDER is not None, "suggestions": []})
-    if ADDRESS_PROVIDER is None:
+        return jsonify({"available": provider is not None, "suggestions": []})
+    if provider is None:
         return jsonify({"available": False, "suggestions": [],
                         "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
     try:
-        suggestions = ADDRESS_PROVIDER.suggest(query, lang, limit=6)
-    except (requests.RequestException, ValueError, TypeError):
-        return jsonify({"available": True, "suggestions": [],
+        suggestions = provider.suggest(query, lang, limit=6)
+    except (requests.RequestException, ValueError) as exc:
+        LOGGER.warning("Address autocomplete upstream failure (%s)",
+                       type(exc).__name__)
+        return jsonify({"available": False, "suggestions": [],
                         "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
     return jsonify({"available": True, "suggestions": suggestions})
 
