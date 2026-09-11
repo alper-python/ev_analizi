@@ -18,11 +18,20 @@ SCHOOL_SPEC = importlib.util.spec_from_file_location(
     "school_scoring", SOURCE_DIR / "school_scoring.py")
 school = importlib.util.module_from_spec(SCHOOL_SPEC)
 SCHOOL_SPEC.loader.exec_module(school)
+HEALTH_SPEC = importlib.util.spec_from_file_location(
+    "health_scoring", SOURCE_DIR / "health_scoring.py")
+health = importlib.util.module_from_spec(HEALTH_SPEC)
+HEALTH_SPEC.loader.exec_module(health)
+TRANSIT_SPEC = importlib.util.spec_from_file_location(
+    "transit_scoring", SOURCE_DIR / "transit_scoring.py")
+transit = importlib.util.module_from_spec(TRANSIT_SPEC)
+TRANSIT_SPEC.loader.exec_module(transit)
 
 
 def _load_app_without_leaking_optional_stubs():
     """Load the app, stubbing only missing dependencies and restoring sys.modules."""
-    stubs = {"market_scoring": market, "school_scoring": school}
+    stubs = {"market_scoring": market, "school_scoring": school,
+             "health_scoring": health, "transit_scoring": transit}
     stubbed_names = []
     for module_name in ("duckdb", "folium"):
         if importlib.util.find_spec(module_name) is None:
@@ -239,7 +248,6 @@ class MarketDeduplicationTests(unittest.TestCase):
 class NonMarketRegressionTests(unittest.TestCase):
     def test_remaining_generic_configuration_and_formula_are_unchanged(self):
         expected = {
-            "transit": {"D0": 800, "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
             "park": {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
             "sport": {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
         }
@@ -249,6 +257,7 @@ class NonMarketRegressionTests(unittest.TestCase):
         self.assertNotIn("school", app.SCORES)
         self.assertNotIn("health", app.SCORING)
         self.assertNotIn("health", app.SCORES)
+        self.assertNotIn("transit", app.SCORING)
         for category, config in expected.items():
             self.assertEqual(app.SCORING[category], config)
             raw = (1 - min(300, config["D0"]) / config["D0"]) * config["w_prox"]
@@ -257,6 +266,9 @@ class NonMarketRegressionTests(unittest.TestCase):
                 app.calc_category_score(category, 2, 300),
                 min(10.0, raw),
             )
+
+        with self.assertRaisesRegex(ValueError, "Transit Score V1"):
+            app.calc_category_score("transit", 2, 300)
 
     def test_generic_market_calls_fail_explicitly(self):
         message = "dedicated"

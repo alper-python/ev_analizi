@@ -10,6 +10,8 @@ from market_scoring import (MARKET_SCORING_RADIUS_M, calc_market_score,
                             deduplicate_market_pois, market_type)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, calc_school_score,
                             deduplicate_school_pois)
+from transit_scoring import (LOCAL_SCORING_RADIUS_M, RADIUS_EPSILON_M,
+                             RAIL_SCORING_RADIUS_M, transit_score_components)
 
 # ========== KULLANICI AYARLANABİLİR PARAMETRELER ==========
 
@@ -45,7 +47,6 @@ OVERALL_WEIGHTS = {
 # w_prox + w_count = 10 (puanların dağılımı)
 # Nsat: sayıda doygunluğa ulaşılacak değer
 SCORING = {
-    "transit":{"D0": 800,  "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
     "park":   {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
     "sport":  {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
 }
@@ -419,6 +420,139 @@ def analyze_health(con, nodes_path, polys_path, lat, lon, display_radius_m, topn
     frame = pd.DataFrame(output, columns=columns)
     return frame, components["score"], n_total, d_min, components
 
+
+def transit_bounding_box(lat, lon, radius_m):
+    """Return a conservative spherical bbox for Transit candidate pruning."""
+    angular_radius = float(radius_m) / 6371000.0
+    latitude = float(lat)
+    lat_radians = math.radians(latitude)
+    lat_delta = math.degrees(angular_radius)
+    lat_min = max(-90.0, latitude - lat_delta)
+    lat_max = min(90.0, latitude + lat_delta)
+    if lat_min <= -90.0 or lat_max >= 90.0:
+        lon_delta = 180.0
+    else:
+        ratio = math.sin(angular_radius) / max(1e-15, math.cos(lat_radians))
+        lon_delta = 180.0 if ratio >= 1.0 else math.degrees(math.asin(ratio))
+    return (
+        math.nextafter(lat_min, -math.inf),
+        math.nextafter(lat_max, math.inf),
+        math.nextafter(float(lon) - lon_delta, -math.inf),
+        math.nextafter(float(lon) + lon_delta, math.inf),
+    )
+
+
+def _duckdb_path(path):
+    return str(os.path.abspath(os.fspath(path))).replace("'", "''")
+
+
+def query_transit_local_candidates(con, stops_path, summary_path, lat, lon):
+    """Join fixed-radius service metadata to each logical stop's nearest member."""
+    lat_min, lat_max, lon_min, lon_max = transit_bounding_box(
+        lat, lon, LOCAL_SCORING_RADIUS_M)
+    query = f"""
+    WITH member_bbox AS (
+      SELECT logical_stop_id, operator, gtfs_stop_id, lat, lon,
+        2*6371000*asin(sqrt(least(1.0, greatest(0.0,
+          sin(radians(lat - {lat})/2)*sin(radians(lat - {lat})/2) +
+          cos(radians({lat}))*cos(radians(lat))*
+          sin(radians(lon - {lon})/2)*sin(radians(lon - {lon})/2)
+        )))) AS distance_m
+      FROM read_parquet('{_duckdb_path(stops_path)}')
+      WHERE lat BETWEEN {lat_min} AND {lat_max}
+        AND lon BETWEEN {lon_min} AND {lon_max}
+    ), nearest_member AS (
+      SELECT *, row_number() OVER (
+        PARTITION BY logical_stop_id
+        ORDER BY distance_m, operator, gtfs_stop_id) AS member_rank
+      FROM member_bbox
+      WHERE distance_m <= {LOCAL_SCORING_RADIUS_M + RADIUS_EPSILON_M}
+    )
+    SELECT summary.logical_stop_id, summary.display_name AS name,
+           nearest.lat, nearest.lon, nearest.distance_m,
+           summary.weekday_departures, summary.saturday_departures,
+           summary.sunday_departures, summary.seven_day_average,
+           summary.operators, summary.modes
+    FROM nearest_member nearest
+    JOIN read_parquet('{_duckdb_path(summary_path)}') summary
+      USING (logical_stop_id)
+    WHERE nearest.member_rank = 1
+    """
+    records = con.execute(query).df().to_dict("records")
+    for record in records:
+        record["operators"] = list(record["operators"])
+        record["modes"] = list(record["modes"])
+    return records
+
+
+def query_transit_rail_candidates(con, rail_path, lat, lon):
+    """Return exact-distance SNCB station candidates inside the fixed radius."""
+    lat_min, lat_max, lon_min, lon_max = transit_bounding_box(
+        lat, lon, RAIL_SCORING_RADIUS_M)
+    query = f"""
+    WITH station_bbox AS (
+      SELECT logical_station_id, station_name AS name, uic_code, lat, lon,
+             weekday_departures, saturday_departures, sunday_departures,
+             seven_day_average,
+        2*6371000*asin(sqrt(least(1.0, greatest(0.0,
+          sin(radians(lat - {lat})/2)*sin(radians(lat - {lat})/2) +
+          cos(radians({lat}))*cos(radians(lat))*
+          sin(radians(lon - {lon})/2)*sin(radians(lon - {lon})/2)
+        )))) AS distance_m
+      FROM read_parquet('{_duckdb_path(rail_path)}')
+      WHERE lat BETWEEN {lat_min} AND {lat_max}
+        AND lon BETWEEN {lon_min} AND {lon_max}
+    )
+    SELECT * FROM station_bbox
+    WHERE distance_m <= {RAIL_SCORING_RADIUS_M + RADIUS_EPSILON_M}
+    """
+    return con.execute(query).df().to_dict("records")
+
+
+def resolve_transit_cache_paths(nodes_path, polys_path, stops_path=None,
+                                summary_path=None, rail_path=None):
+    """Resolve service caches beside the configured POI caches by default."""
+    source_path = nodes_path or polys_path
+    cache_dir = os.path.dirname(os.path.abspath(source_path)) if source_path else None
+
+    def resolve(explicit, filename):
+        candidate = explicit
+        if candidate is None and cache_dir:
+            candidate = os.path.join(cache_dir, filename)
+        return candidate if candidate and os.path.isfile(candidate) else None
+
+    return (
+        resolve(stops_path, "be_transit_service_stops.parquet"),
+        resolve(summary_path, "be_transit_service_summary.parquet"),
+        resolve(rail_path, "be_rail_service.parquet"),
+    )
+
+
+def analyze_transit(con, nodes_path, polys_path, service_stops_path,
+                    service_summary_path, rail_service_path, lat, lon,
+                    display_radius_m, topn):
+    """Compute fixed-radius Transit V1 and legacy radius-driven display rows."""
+    local_candidates = []
+    if service_stops_path and service_summary_path:
+        local_candidates = query_transit_local_candidates(
+            con, service_stops_path, service_summary_path, lat, lon)
+    rail_candidates = []
+    if rail_service_path:
+        rail_candidates = query_transit_rail_candidates(
+            con, rail_service_path, lat, lon)
+    components = transit_score_components(local_candidates, rail_candidates)
+
+    # The existing OSM list remains display-only compatibility data. Its raw
+    # count and nearest infrastructure distance never enter Transit Score V1.
+    display = query_category(
+        con, nodes_path, polys_path, "transit", lat, lon,
+        display_radius_m, topn)
+    n_total = int(display.iloc[0]["n_total"]) if not display.empty else 0
+    d_min = (float(display.iloc[0]["d_min"])
+             if not display.empty and pd.notnull(display.iloc[0]["d_min"])
+             else None)
+    return display, components["score"], n_total, d_min, components
+
 def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
     if cat == "market":
         raise ValueError("Market uses the dedicated analyze_market() Market Score V1 path.")
@@ -500,6 +634,8 @@ def calc_category_score(cat, n_total:int, d_min:float, has_hospital:bool=False) 
         raise ValueError("School uses calc_school_score() in the dedicated School Score V1 path.")
     if cat == "health":
         raise ValueError("Health uses health_score_components() in the dedicated Health Score V1 path.")
+    if cat == "transit":
+        raise ValueError("Transit uses transit_score_components() in the dedicated Transit Score V1 path.")
     # Kategoriye göre konfig
     cfg = SCORING[cat]
     D0 = cfg["D0"]
@@ -560,6 +696,7 @@ def main():
     all_rows=[]
     cat_scores={}
     summary_rows=[]  # kategori scorecard için
+    transit_paths = resolve_transit_cache_paths(nodes_path, polys_path)
 
     for cat in CATS.keys():
         dedicated_score = None
@@ -572,6 +709,10 @@ def main():
         elif cat == "health":
             df, dedicated_score, _, _, _ = analyze_health(
                 con, nodes_path, polys_path, lat, lon, args.radius, args.topn)
+        elif cat == "transit":
+            df, dedicated_score, _, _, _ = analyze_transit(
+                con, nodes_path, polys_path, *transit_paths,
+                lat, lon, args.radius, args.topn)
         else:
             df = query_category(con, nodes_path, polys_path, cat, lat, lon, args.radius, args.topn)
         label = CATS[cat]["label"]
@@ -678,7 +819,9 @@ def main():
     print(f"\nHarita kaydedildi: {out}")
 
 def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_N,
-            nodes_path="./cache/be_poi.parquet", polys_path="./cache/be_poi_poly.parquet"):
+            nodes_path="./cache/be_poi.parquet", polys_path="./cache/be_poi_poly.parquet",
+            transit_stops_path=None, transit_summary_path=None,
+            rail_service_path=None):
     # konum
     if address:
         lat, lon, disp = geocode(address)
@@ -696,9 +839,14 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
     all_rows = []
     cat_scores = {}
     summary_rows = []
+    breakdowns = {}
+    transit_paths = resolve_transit_cache_paths(
+        nodes_path if nodes_ok else None, polys_path if polys_ok else None,
+        transit_stops_path, transit_summary_path, rail_service_path)
 
     for cat in CATS.keys():
         dedicated_score = None
+        dedicated_components = None
         if cat == "market":
             df, dedicated_score, _, _ = analyze_market(
                 con, nodes_path if nodes_ok else None,
@@ -714,6 +862,12 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 con, nodes_path if nodes_ok else None,
                 polys_path if polys_ok else None,
                 lat, lon, radius, topn)
+        elif cat == "transit":
+            df, dedicated_score, _, _, dedicated_components = analyze_transit(
+                con, nodes_path if nodes_ok else None,
+                polys_path if polys_ok else None, *transit_paths,
+                lat, lon, radius, topn)
+            breakdowns[cat] = dedicated_components
         else:
             df = query_category(con, nodes_path if nodes_ok else None,
                                 polys_path if polys_ok else None,
@@ -814,6 +968,7 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
         "scores": cat_scores_pretty,
         "overall": float(f"{(sum(OVERALL_WEIGHTS.get(c,0.0)*cat_scores.get(c,0.0) for c in CATS.keys())):.1f}"),
         "results": results_by_cat,
+        "breakdowns": breakdowns,
     }
 
 

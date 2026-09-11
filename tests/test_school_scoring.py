@@ -294,7 +294,6 @@ class SchoolOrchestrationTests(unittest.TestCase):
 
     def test_non_school_scoring_configuration_and_formulas_are_unchanged(self):
         expected = {
-            "transit": {"D0": 800, "w_prox": 7.0, "w_count": 3.0, "Nsat": 5},
             "park": {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
             "sport": {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
         }
@@ -305,6 +304,8 @@ class SchoolOrchestrationTests(unittest.TestCase):
             self.assertAlmostEqual(
                 app.calc_category_score(category, 2, 300),
                 min(10.0, raw))
+        with self.assertRaisesRegex(ValueError, "Transit Score V1"):
+            app.calc_category_score("transit", 2, 300)
         market_row = {"name": "Market", "brand": None, "lat": 50.0, "lon": 4.0,
                       "amenity": None, "shop": "supermarket", "source": "node",
                       "d_lin": 300.0}
