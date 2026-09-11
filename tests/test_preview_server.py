@@ -386,6 +386,136 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
                         breakdowns[0]["score_precise"], expected, places=8)
 
 
+class ParkFrontendContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_collapsed_summary_uses_backend_winner_not_generic_nearest(self):
+        start = self.frontend.index("parkSummary(breakdown, t)")
+        end = self.frontend.index("scoreColor(s)", start)
+        summary = self.frontend[start:end]
+        self.assertIn("breakdown.winner", summary)
+        self.assertIn("winner.distance_m", summary)
+        self.assertNotIn("nearest_m", summary)
+        self.assertNotIn("count", summary)
+        self.assertIn("parkSummaryStr", self.frontend)
+
+    def test_park_components_and_total_use_backend_fields(self):
+        for field in ("parkBreakdown.primary_points",
+                      "parkBreakdown.choice_points",
+                      "parkBreakdown.secondary_points"):
+            self.assertIn(field, self.frontend)
+        self.assertIn(
+            "parkTotalStr: cat.key === 'park' ? this.fmtParkValue(cat.score)",
+            self.frontend)
+        self.assertNotIn(
+            "parkBreakdown.primary_points + parkBreakdown.choice_points",
+            self.frontend)
+
+    def test_all_park_classes_are_localized_in_tr_en_nl(self):
+        for key in ("park", "garden", "leisure_recreation",
+                    "landuse_recreation", "village_green", "nature_reserve",
+                    "national_park", "protected_area", "playground", "dog_park"):
+            self.assertGreaterEqual(self.frontend.count(key + ":"), 6)
+        for text in ("Açık hava dinlenme alanı", "Protected natural area",
+                     "Beschermd natuurgebied", "Oyun alanı", "Playground",
+                     "Speeltuin"):
+            self.assertIn(text, self.frontend)
+        self.assertIn("t.parkTypes[value] || t.parkGenericClass", self.frontend)
+
+    def test_park_wording_is_plain_and_concise_in_all_languages(self):
+        for text in (
+            "Park skoru nasıl oluşuyor?",
+            "En iyi park seçeneği",
+            "Yakındaki diğer parklar",
+            "Oyun alanları ve köpek parkları",
+            "How is the Park score built?",
+            "Best park option",
+            "Other nearby parks",
+            "Playgrounds and dog parks",
+            "Hoe is de Parkscore opgebouwd?",
+            "Beste parkoptie",
+            "Andere parken in de buurt",
+            "Speeltuinen en hondenweides",
+        ):
+            self.assertIn(text, self.frontend)
+        for old_text in (
+            "Ana park erişimi",
+            "İkincil rekreasyon",
+            "Main park access",
+            "Secondary recreation",
+            "Toegang tot een hoofdpark",
+            "Secundaire recreatie",
+        ):
+            self.assertNotIn(old_text, self.frontend)
+
+    def test_component_copy_uses_backend_counts_without_repeating_overview(self):
+        self.assertIn(
+            "parkBreakdown.choice.distinct_alternative_identity_count",
+            self.frontend,
+        )
+        self.assertIn(
+            "parkBreakdown.secondary.contributing_candidate_count",
+            self.frontend,
+        )
+        for text in (
+            "Ek puan sağlayan başka park seçeneği bulunamadı.",
+            "1 other park option contributes extra points.",
+            "No nearby playground or dog park contributes.",
+            "1 andere parkoptie draagt bij aan de extra punten.",
+            "Geen speeltuin of hondenweide in de buurt draagt bij.",
+        ):
+            self.assertIn(text, self.frontend)
+        self.assertIn("{{ cat.parkChoiceCountStr }}", self.frontend)
+        self.assertIn("{{ cat.parkSecondaryCountStr }}", self.frontend)
+        self.assertNotIn("{{ t.parkChoiceShort }}", self.frontend)
+        self.assertNotIn("{{ t.parkSecondaryShort }}", self.frontend)
+
+    def test_unnamed_park_fallbacks_do_not_render_backend_placeholder(self):
+        for text in ("İsimsiz park", "Naamloos park", "Unnamed park",
+                     "İsimsiz oyun alanı", "Naamloze speeltuin",
+                     "Unnamed playground"):
+            self.assertIn(text, self.frontend)
+        self.assertIn("String(value).trim().toLowerCase() !== 'unnamed'",
+                      self.frontend)
+        self.assertIn("t.parkUnnamedTypes[item.park_class]", self.frontend)
+
+    def test_area_and_missing_area_are_handled_without_raw_values(self):
+        self.assertIn("if (!Number.isFinite(value) || value <= 0) return ''",
+                      self.frontend)
+        self.assertIn("value < 10000", self.frontend)
+        self.assertIn("value / 10000", self.frontend)
+        self.assertIn("Intl.NumberFormat", self.frontend)
+
+    def test_park_explanation_and_nearby_title_exist_in_all_languages(self):
+        for text in (
+            "Haritadaki 1 / 2,5 / 5 km seçimi Park skorunu değiştirmez.",
+            "Changing the 1 / 2.5 / 5 km display radius does not change the Park score.",
+            "Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de Parkscore niet.",
+            "Yakındaki park ve rekreasyon alanları",
+            "Nearby parks and recreation",
+            "Parken en recreatie in de buurt",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_park_list_and_map_share_localized_name_and_class_helpers(self):
+        self.assertIn("name: cat.key === 'park' ? this.parkName(it, t)",
+                      self.frontend)
+        self.assertIn("this.parkClassLabel(it.park_class, t)", self.frontend)
+        self.assertIn("const markerName = cat.key === 'park' ? this.parkName(it, t)",
+                      self.frontend)
+        self.assertIn("this.parkClassLabel(it.park_class, t)", self.frontend)
+
+    def test_no_winner_and_secondary_only_states_use_safe_summary(self):
+        self.assertIn("if (!winner) return t.parkNoWinner", self.frontend)
+        for text in ("Yakında güçlü bir park seçeneği bulunamadı",
+                     "No strong park option nearby",
+                     "Geen sterke parkoptie in de buurt"):
+            self.assertIn(text, self.frontend)
+
+
 class TransitPreviewContractTests(unittest.TestCase):
     def setUp(self):
         server._result_cache.clear()
@@ -631,7 +761,7 @@ class HealthExplanationContentTests(unittest.TestCase):
             self.frontend,
         )
         self.assertIn(
-            "textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit') ? 'none' : 'capitalize'",
+            "textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park') ? 'none' : 'capitalize'",
             self.frontend,
         )
 
@@ -748,7 +878,7 @@ class TransitExplanationContentTests(unittest.TestCase):
             self.frontend,
         )
         self.assertIn(
-            "scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : this.fmtScore(cat.score)",
+            "scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : this.fmtScore(cat.score))",
             self.frontend,
         )
         self.assertNotIn(

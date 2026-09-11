@@ -107,6 +107,11 @@
                 grid-template-columns: repeat(2, minmax(0, 1fr));
                 gap: 8px
             }
+            .park-breakdown-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 8px
+            }
             .transit-departure-grid {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -179,6 +184,7 @@
             }
 
             @media (max-width: 520px) {
+                .park-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
                 .poi-distances { flex-direction: column; align-items: flex-start; gap: 4px }
                 .transit-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
             }
@@ -485,6 +491,9 @@
                                                             <span>·</span><span>{{ cat.healthClinicalSummaryStr }}</span><span>·</span><span>{{ cat.healthHospitalSummaryStr }}</span>
                                                         </sc-if>
                                                     </sc-if>
+                                                    <sc-if value="{{ cat.isPark }}" hint-placeholder-val="{{ false }}">
+                                                        <span>{{ cat.parkSummaryStr }}</span>
+                                                    </sc-if>
                                                 </div>
                                             </div>
                                             <div style="{{ cat.chevStyle }}">›</div>
@@ -567,6 +576,17 @@
                                                 </sc-if>
                                             </div>
                                         </sc-if>
+                                        <sc-if value="{{ cat.isPark }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:0 16px 11px 66px">
+                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.parkHow }}</button>
+                                                <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                        <div>{{ t.parkOverview }}</div>
+                                                        <div style="margin-top:6px">{{ t.parkDistanceRadius }}</div>
+                                                    </div>
+                                                </sc-if>
+                                            </div>
+                                        </sc-if>
                                         <sc-if value="{{ cat.isOpen }}" hint-placeholder-val="{{ false }}">
                                             <div style="border-top:1px solid var(--line)">
                                                 <sc-if value="{{ cat.isTransit }}" hint-placeholder-val="{{ false }}">
@@ -620,6 +640,44 @@
                                                         <div style="margin-top:3px;font:600 10.5px/1.45 Manrope;color:var(--muted)">{{ t.transitLegacyNote }}</div>
                                                     </div>
                                                 </sc-if>
+                                                <sc-if value="{{ cat.isPark }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="padding:13px 16px;background:var(--bg);border-bottom:1px solid var(--line)">
+                                                        <div class="park-breakdown-grid">
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.parkPrimaryLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#3E9B4F;white-space:nowrap">{{ cat.parkPrimaryPointsStr }} / {{ cat.parkPrimaryMaxStr }}</strong>
+                                                                </div>
+                                                                <sc-if value="{{ cat.hasParkWinner }}" hint-placeholder-val="{{ true }}">
+                                                                    <div style="margin-top:9px;font:800 13px/1.4 Manrope;color:var(--ink);overflow-wrap:anywhere">{{ cat.parkWinnerName }}</div>
+                                                                    <div style="margin-top:3px;font:600 11px/1.45 Manrope;color:var(--muted)">{{ cat.parkWinnerClass }}</div>
+                                                                    <div style="margin-top:3px;font:600 11px/1.45 Manrope;color:var(--muted)">{{ cat.parkWinnerDistance }}</div>
+                                                                    <sc-if value="{{ cat.parkWinnerArea }}" hint-placeholder-val="{{ false }}"><div style="margin-top:3px;font:600 11px/1.45 Manrope;color:var(--muted)">{{ cat.parkWinnerArea }}</div></sc-if>
+                                                                </sc-if>
+                                                                <sc-if value="{{ cat.noParkWinner }}" hint-placeholder-val="{{ false }}"><div style="margin-top:9px;font:600 11px/1.5 Manrope;color:var(--muted)">{{ t.parkNoWinner }}</div></sc-if>
+                                                            </div>
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.parkChoiceLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#3E9B4F;white-space:nowrap">{{ cat.parkChoicePointsStr }} / 2</strong>
+                                                                </div>
+                                                                <div style="margin-top:9px;font:600 11px/1.5 Manrope;color:var(--muted)">{{ cat.parkChoiceCountStr }}</div>
+                                                            </div>
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.parkSecondaryLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#3E9B4F;white-space:nowrap">{{ cat.parkSecondaryPointsStr }} / {{ cat.parkSecondaryMaxStr }}</strong>
+                                                                </div>
+                                                                <div style="margin-top:9px;font:600 11px/1.5 Manrope;color:var(--muted)">{{ cat.parkSecondaryCountStr }}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px;padding:9px 11px;border-radius:8px;background:rgba(62,155,79,.1)">
+                                                            <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.parkTotalLabel }}</strong>
+                                                            <strong style="font:800 16px Manrope;color:#3E9B4F">{{ cat.parkTotalStr }} / 10</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div style="padding:11px 16px;border-bottom:1px solid var(--line);background:var(--surface);font:800 12px Manrope;color:var(--muted)">{{ t.parkNearbyTitle }}</div>
+                                                </sc-if>
                                                 <sc-if value="{{ cat.limitNote }}" hint-placeholder-val="{{ false }}">
                                                     <div style="padding:9px 16px;border-bottom:1px solid var(--line);font:700 11px Manrope;color:var(--muted)">{{ cat.limitNote }}</div>
                                                 </sc-if>
@@ -634,6 +692,9 @@
                                                             </div>
                                                             <sc-if value="{{ row.typeStr }}" hint-placeholder-val="{{ false }}">
                                                                 <div style="{{ row.typeStyle }}">{{ row.typeStr }}</div>
+                                                            </sc-if>
+                                                            <sc-if value="{{ row.areaStr }}" hint-placeholder-val="{{ false }}">
+                                                                <div style="font:600 10.5px Manrope;color:var(--muted)">{{ row.areaStr }}</div>
                                                             </sc-if>
                                                             <div class="poi-distances">
                                                                 <span class="poi-distance"><span aria-hidden="true">📍</span>{{ row.straightStr }}</span>
@@ -756,7 +817,7 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, transitInfoOpen: false, radiusInfoOpen: false,
+          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, transitInfoOpen: false, parkInfoOpen: false, radiusInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -797,7 +858,10 @@
             healthTypes: { clinic: 'Klinik', doctor: 'Doktor', doctors: 'Doktor', pharmacy: 'Eczane', dentist: 'Diş hekimi', hospital: 'Hastane', physiotherapist: 'Fizyoterapist', psychotherapist: 'Psikoterapist', laboratory: 'Laboratuvar', blood_donation: 'Kan bağışı' },
             transitModes: { BUS: 'Otobüs', TRAM: 'Tramvay', METRO: 'Metro', LIGHT_RAIL: 'Hafif raylı sistem', RAIL: 'Tren' },
             transitDisplayTypes: { bus_stop: 'Otobüs durağı', bus_station: 'Otobüs istasyonu', rail_station: 'Raylı sistem istasyonu', rail_halt: 'Tren durağı', tram_stop: 'Tramvay durağı', transit_platform: 'Toplu taşıma peronu', transit_stop: 'Ulaşım durağı', transit_point: 'Ulaşım noktası' },
-            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', transitHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
+            parkTypes: { park: 'Park', garden: 'Bahçe', leisure_recreation: 'Açık hava dinlenme alanı', landuse_recreation: 'Açık hava dinlenme alanı', village_green: 'Mahalle yeşil alanı', nature_reserve: 'Doğa koruma alanı', national_park: 'Milli park', protected_area: 'Korunan doğa alanı', playground: 'Oyun alanı', dog_park: 'Köpek parkı' },
+            parkUnnamedTypes: { park: 'İsimsiz park', garden: 'İsimsiz bahçe', leisure_recreation: 'İsimsiz açık hava dinlenme alanı', landuse_recreation: 'İsimsiz açık hava dinlenme alanı', village_green: 'İsimsiz mahalle yeşil alanı', nature_reserve: 'İsimsiz doğa koruma alanı', national_park: 'İsimsiz milli park', protected_area: 'İsimsiz korunan doğa alanı', playground: 'İsimsiz oyun alanı', dog_park: 'İsimsiz köpek parkı' },
+            parkGenericClass: 'Park ve rekreasyon alanı', parkUnnamedGeneric: 'İsimsiz park ve rekreasyon alanı',
+            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', transitHow: 'Nasıl hesaplanır?', parkHow: 'Park skoru nasıl oluşuyor?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
             radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
             proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
@@ -840,6 +904,15 @@
             transitLimitations: 'Gecikmeler, iptaller, gerçek zamanlı araç durumu ve gerçek yürüyüş rotası bu puana dahil değildir.',
             transitLegacyTitle: 'Haritada gösterilen ulaşım noktaları',
             transitLegacyNote: 'Bu ikincil liste harita ve altyapı bilgisidir; sayısal skorun hesaplama dökümü değildir.',
+            parkWinnerSummary: (name, dist) => 'En iyi seçenek: ' + name + ' · ' + dist,
+            parkNoWinner: 'Yakında güçlü bir park seçeneği bulunamadı',
+            parkPrimaryLabel: 'En iyi park seçeneği', parkChoiceLabel: 'Yakındaki diğer parklar', parkSecondaryLabel: 'Oyun alanları ve köpek parkları', parkTotalLabel: 'Toplam',
+            parkOverview: 'Park skoru; en iyi park seçeneği, yakındaki diğer parklar ve oyun/köpek parklarından oluşur. En büyük pay en iyi park seçeneğinden gelir.',
+            parkDistanceRadius: 'Mesafeler kuş uçuşudur; gerçek giriş ve yürüme yolu farklı olabilir. Haritadaki 1 / 2,5 / 5 km seçimi Park skorunu değiştirmez.',
+            parkChoiceCount: count => count === 0 ? 'Ek puan sağlayan başka park seçeneği bulunamadı.' : count + ' farklı park seçeneği ek puana katkı sağlıyor.',
+            parkSecondaryCount: count => count === 0 ? 'Yakında katkı sağlayan oyun alanı veya köpek parkı bulunamadı.' : count + ' yakın oyun alanı veya köpek parkı katkı sağlıyor.',
+            parkNearbyTitle: 'Yakındaki park ve rekreasyon alanları',
+            parkArea: value => 'yaklaşık ' + value,
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -876,7 +949,10 @@
             healthTypes: { clinic: 'Clinic', doctor: 'Doctor', doctors: 'Doctor', pharmacy: 'Pharmacy', dentist: 'Dentist', hospital: 'Hospital', physiotherapist: 'Physiotherapist', psychotherapist: 'Psychotherapist', laboratory: 'Laboratory', blood_donation: 'Blood donation' },
             transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Light rail', RAIL: 'Rail' },
             transitDisplayTypes: { bus_stop: 'Bus stop', bus_station: 'Bus station', rail_station: 'Rail station', rail_halt: 'Railway halt', tram_stop: 'Tram stop', transit_platform: 'Transit platform', transit_stop: 'Transit stop', transit_point: 'Transit point' },
-            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', transitHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
+            parkTypes: { park: 'Park', garden: 'Garden', leisure_recreation: 'Outdoor recreation area', landuse_recreation: 'Outdoor recreation area', village_green: 'Neighbourhood green', nature_reserve: 'Nature reserve', national_park: 'National park', protected_area: 'Protected natural area', playground: 'Playground', dog_park: 'Dog park' },
+            parkUnnamedTypes: { park: 'Unnamed park', garden: 'Unnamed garden', leisure_recreation: 'Unnamed outdoor recreation area', landuse_recreation: 'Unnamed outdoor recreation area', village_green: 'Unnamed neighbourhood green', nature_reserve: 'Unnamed nature reserve', national_park: 'Unnamed national park', protected_area: 'Unnamed protected natural area', playground: 'Unnamed playground', dog_park: 'Unnamed dog park' },
+            parkGenericClass: 'Park or recreation area', parkUnnamedGeneric: 'Unnamed park or recreation area',
+            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', transitHow: 'How is this calculated?', parkHow: 'How is the Park score built?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
             radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
             proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
@@ -919,6 +995,15 @@
             transitLimitations: 'Delays, cancellations, realtime vehicle status and the actual walking route are not included in this score.',
             transitLegacyTitle: 'Transit points shown on map',
             transitLegacyNote: 'This secondary list is map and infrastructure information; it is not the numeric score breakdown.',
+            parkWinnerSummary: (name, dist) => 'Best option: ' + name + ' · ' + dist,
+            parkNoWinner: 'No strong park option nearby',
+            parkPrimaryLabel: 'Best park option', parkChoiceLabel: 'Other nearby parks', parkSecondaryLabel: 'Playgrounds and dog parks', parkTotalLabel: 'Total',
+            parkOverview: 'The Park score combines the best park option, other nearby parks, and playgrounds or dog parks. The best park option contributes the largest share.',
+            parkDistanceRadius: 'Distances are straight-line; the actual entrance and walking route may differ. Changing the 1 / 2.5 / 5 km display radius does not change the Park score.',
+            parkChoiceCount: count => count === 0 ? 'No other park option contributes extra points.' : (count === 1 ? '1 other park option contributes extra points.' : count + ' different park options contribute extra points.'),
+            parkSecondaryCount: count => count === 0 ? 'No nearby playground or dog park contributes.' : (count === 1 ? '1 nearby playground or dog park contributes.' : count + ' nearby playgrounds or dog parks contribute.'),
+            parkNearbyTitle: 'Nearby parks and recreation',
+            parkArea: value => 'about ' + value,
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -955,7 +1040,10 @@
             healthTypes: { clinic: 'Kliniek', doctor: 'Arts', doctors: 'Arts', pharmacy: 'Apotheek', dentist: 'Tandarts', hospital: 'Ziekenhuis', physiotherapist: 'Kinesitherapeut', psychotherapist: 'Psychotherapeut', laboratory: 'Laboratorium', blood_donation: 'Bloeddonatie' },
             transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Lightrail', RAIL: 'Trein' },
             transitDisplayTypes: { bus_stop: 'Bushalte', bus_station: 'Busstation', rail_station: 'Railstation', rail_halt: 'Treinhalte', tram_stop: 'Tramhalte', transit_platform: 'OV-perron', transit_stop: 'Vervoershalte', transit_point: 'Vervoerspunt' },
-            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', transitHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
+            parkTypes: { park: 'Park', garden: 'Tuin', leisure_recreation: 'Groene recreatieplek', landuse_recreation: 'Groene recreatieplek', village_green: 'Buurtgroen', nature_reserve: 'Natuurgebied', national_park: 'Nationaal park', protected_area: 'Beschermd natuurgebied', playground: 'Speeltuin', dog_park: 'Hondenweide' },
+            parkUnnamedTypes: { park: 'Naamloos park', garden: 'Naamloze tuin', leisure_recreation: 'Naamloze groene recreatieplek', landuse_recreation: 'Naamloze groene recreatieplek', village_green: 'Naamloos buurtgroen', nature_reserve: 'Naamloos natuurgebied', national_park: 'Naamloos nationaal park', protected_area: 'Naamloos beschermd natuurgebied', playground: 'Naamloze speeltuin', dog_park: 'Naamloze hondenweide' },
+            parkGenericClass: 'Park of recreatiegebied', parkUnnamedGeneric: 'Naamloos park of recreatiegebied',
+            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', transitHow: 'Hoe wordt dit berekend?', parkHow: 'Hoe is de Parkscore opgebouwd?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
             radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
             proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
@@ -998,6 +1086,15 @@
             transitLimitations: 'Vertragingen, annuleringen, realtime voertuigstatus en de werkelijke wandelroute zijn niet in deze score opgenomen.',
             transitLegacyTitle: 'Vervoerspunten op de kaart',
             transitLegacyNote: 'Deze secundaire lijst bevat kaart- en infrastructuurinformatie; het is niet de berekening van de numerieke score.',
+            parkWinnerSummary: (name, dist) => 'Beste optie: ' + name + ' · ' + dist,
+            parkNoWinner: 'Geen sterke parkoptie in de buurt',
+            parkPrimaryLabel: 'Beste parkoptie', parkChoiceLabel: 'Andere parken in de buurt', parkSecondaryLabel: 'Speeltuinen en hondenweides', parkTotalLabel: 'Totaal',
+            parkOverview: 'De Parkscore bestaat uit de beste parkoptie, andere parken in de buurt en speeltuinen of hondenweides. De beste parkoptie telt het zwaarst mee.',
+            parkDistanceRadius: 'Afstanden zijn hemelsbreed; de werkelijke ingang en wandelroute kunnen afwijken. Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de Parkscore niet.',
+            parkChoiceCount: count => count === 0 ? 'Geen andere parkoptie draagt bij aan extra punten.' : (count === 1 ? '1 andere parkoptie draagt bij aan de extra punten.' : count + ' verschillende parkopties dragen bij aan de extra punten.'),
+            parkSecondaryCount: count => count === 0 ? 'Geen speeltuin of hondenweide in de buurt draagt bij.' : (count === 1 ? '1 speeltuin of hondenweide in de buurt draagt bij.' : count + ' speeltuinen of hondenweides in de buurt dragen bij.'),
+            parkNearbyTitle: 'Parken en recreatie in de buurt',
+            parkArea: value => 'ongeveer ' + value,
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -1053,12 +1150,15 @@
               { name: 'Halte Kantineplein', lat: 50.8730, lon: 4.6850, walk_m: 600, walk_min: 8, drive_m: 700, drive_min: 2 },
               { name: 'Station Heverlee', lat: 50.8700, lon: 4.6940, walk_m: 850, walk_min: 11, drive_m: 950, drive_min: 3 },
               { name: 'Station Leuven', lat: 50.8812, lon: 4.7160, walk_m: 2900, walk_min: 37, drive_m: 3300, drive_min: 8 }] },
-            { key: 'park', score: 7.1, count: 6, nearest_m: 500, has_hospital: null, items: [
-              { name: 'Park van Heverlee', lat: 50.8790, lon: 4.6870, walk_m: 500, walk_min: 7, drive_m: 600, drive_min: 2 },
-              { name: 'Arenbergpark', lat: 50.8630, lon: 4.6850, walk_m: 1100, walk_min: 14, drive_m: 1300, drive_min: 4 },
-              { name: 'Egenhoven Speelbos', lat: 50.8700, lon: 4.6600, walk_m: 1800, walk_min: 23, drive_m: 2000, drive_min: 5 },
-              { name: 'Sint-Lambertuspark', lat: 50.8880, lon: 4.6900, walk_m: 2000, walk_min: 26, drive_m: 2300, drive_min: 6 },
-              { name: 'Heverleebos', lat: 50.8560, lon: 4.6700, walk_m: 2300, walk_min: 30, drive_m: 2600, drive_min: 6 }] },
+            { key: 'park', score: 7.1, count: 6, nearest_m: 500, has_hospital: null,
+              score_breakdown: { score_public: 7.1, primary_points: 5.2, choice_points: 1.5, secondary_points: 0.4,
+                winner: { display_name: 'Park van Heverlee', name: 'Park van Heverlee', park_class: 'park', distance_m: 400, area_m2: 12283 } },
+              items: [
+              { name: 'Park van Heverlee', display_name: 'Park van Heverlee', park_class: 'park', area_m2: 12283, straight_m: 400, lat: 50.8790, lon: 4.6870, walk_m: 500, walk_min: 7, drive_m: 600, drive_min: 2 },
+              { name: 'Arenbergpark', display_name: 'Arenbergpark', park_class: 'park', area_m2: 23065, straight_m: 880, lat: 50.8630, lon: 4.6850, walk_m: 1100, walk_min: 14, drive_m: 1300, drive_min: 4 },
+              { name: 'Egenhoven Speelbos', display_name: 'Egenhoven Speelbos', park_class: 'playground', area_m2: 8400, straight_m: 1440, lat: 50.8700, lon: 4.6600, walk_m: 1800, walk_min: 23, drive_m: 2000, drive_min: 5 },
+              { name: 'Sint-Lambertuspark', display_name: 'Sint-Lambertuspark', park_class: 'park', area_m2: 19000, straight_m: 1600, lat: 50.8880, lon: 4.6900, walk_m: 2000, walk_min: 26, drive_m: 2300, drive_min: 6 },
+              { name: 'Heverleebos', display_name: 'Heverleebos', park_class: 'nature_reserve', area_m2: 2971674, straight_m: 1840, lat: 50.8560, lon: 4.6700, walk_m: 2300, walk_min: 30, drive_m: 2600, drive_min: 6 }] },
             { key: 'sport', score: 5.9, count: 5, nearest_m: 900, has_hospital: null, items: [
               { name: 'Universitair Sportcentrum', lat: 50.8620, lon: 4.6920, walk_m: 900, walk_min: 12, drive_m: 1000, drive_min: 3 },
               { name: 'Basic-Fit Leuven Zuid', lat: 50.8800, lon: 4.6900, walk_m: 1200, walk_min: 16, drive_m: 1400, drive_min: 4 },
@@ -1117,6 +1217,36 @@
             this.fmtTransitDistance(breakdown.best_rail_distance_m)));
         }
         return parts.length ? parts.join(' · ') : t.transitSummaryNone;
+      }
+      fmtParkValue(value) {
+        if (!Number.isFinite(value)) return '—';
+        const formatted = value.toFixed(1);
+        return this.state.lang === 'en' ? formatted : formatted.replace('.', ',');
+      }
+      fmtParkDistance(value) {
+        if (!Number.isFinite(value)) return '';
+        if (value < 1000) return Math.round(value) + ' m';
+        return this.fmtParkValue(value / 1000) + ' km';
+      }
+      fmtParkArea(value, t) {
+        if (!Number.isFinite(value) || value <= 0) return '';
+        const locale = this.state.lang === 'tr' ? 'tr-TR' : (this.state.lang === 'nl' ? 'nl-NL' : 'en-US');
+        if (value < 10000) return t.parkArea(new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Math.round(value)) + ' m²');
+        const hectares = value / 10000;
+        const digits = hectares >= 100 ? 0 : 1;
+        return t.parkArea(new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(hectares) + ' ha');
+      }
+      parkClassLabel(value, t) { return t.parkTypes[value] || t.parkGenericClass; }
+      parkName(item, t) {
+        if (!item) return t.parkUnnamedGeneric;
+        const names = [item.display_name, item.name];
+        const name = names.find(value => value && String(value).trim() && String(value).trim().toLowerCase() !== 'unnamed');
+        return name ? String(name).trim() : (t.parkUnnamedTypes[item.park_class] || t.parkUnnamedGeneric);
+      }
+      parkSummary(breakdown, t) {
+        const winner = breakdown && breakdown.winner;
+        if (!winner) return t.parkNoWinner;
+        return t.parkWinnerSummary(this.parkName(winner, t), this.fmtParkDistance(winner.distance_m));
       }
       scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
 
@@ -1290,8 +1420,10 @@
           const g = L.layerGroup(); this.mk[cat.key] = [];
           cat.items.forEach((it, i) => {
             const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
+            const markerName = cat.key === 'park' ? this.parkName(it, t) : it.name;
+            const markerType = cat.key === 'park' ? '<br>' + this.parkClassLabel(it.park_class, t) : '';
             const m = L.circleMarker([it.lat, it.lon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
-              .bindPopup('<b>' + it.name + '</b><br>📍 ' + t.straightLine + ': ' + this.fmtDist(straight) + '<br>🚶 ' + t.estimatedWalk + ': ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>🚗 ' + t.estimatedDrive + ': ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
+              .bindPopup('<b>' + markerName + '</b>' + markerType + '<br>📍 ' + t.straightLine + ': ' + this.fmtDist(straight) + '<br>🚶 ' + t.estimatedWalk + ': ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>🚗 ' + t.estimatedDrive + ': ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
             m.addTo(g); this.mk[cat.key][i] = m;
           });
           this.groups[cat.key] = g;
@@ -1365,6 +1497,8 @@
         const cats = (d ? d.categories : []).map(cat => {
           const col = COL[cat.key], sc = this.scoreColor(cat.score), hid = !!S.hidden[cat.key], open = S.open === cat.key;
           const transitBreakdown = cat.key === 'transit' && cat.score_breakdown ? cat.score_breakdown : null;
+          const parkBreakdown = cat.key === 'park' && cat.score_breakdown ? cat.score_breakdown : null;
+          const parkWinner = parkBreakdown && parkBreakdown.winner ? parkBreakdown.winner : null;
           const hasLocalTransit = !!(transitBreakdown && transitBreakdown.best_local_logical_stop_id);
           const hasRailTransit = !!(transitBreakdown && transitBreakdown.best_rail_logical_station_id);
           const localModes = transitBreakdown ? this.fmtTransitModes(transitBreakdown.best_local_modes, t) : '';
@@ -1372,19 +1506,20 @@
             ? transitBreakdown.best_local_operators.filter(Boolean).join(', ') : '';
           return {
             key: cat.key, label: t.cats[cat.key], count: cat.count, isOpen: open,
-            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isTransit: cat.key === 'transit',
-            isGenericSummary: cat.key !== 'health' && cat.key !== 'transit',
-            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' ? S.healthInfoOpen : (cat.key === 'transit' && S.transitInfoOpen))),
+            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isTransit: cat.key === 'transit', isPark: cat.key === 'park',
+            isGenericSummary: cat.key !== 'health' && cat.key !== 'transit' && cat.key !== 'park',
+            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' ? S.healthInfoOpen : (cat.key === 'transit' ? S.transitInfoOpen : (cat.key === 'park' && S.parkInfoOpen)))),
             icon: this.ic(cat.key, col, 19),
             iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
-            scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : this.fmtScore(cat.score),
+            scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : this.fmtScore(cat.score)),
             scoreStyle: { font: '800 17px Manrope', color: sc },
             barStyle: { height: '100%', width: (cat.score * 10) + '%', borderRadius: '3px', background: sc, transition: 'width .5s ease' },
             countStr: cat.count + ' ' + t.points,
             nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m) + ' ' + t.straightSuffix,
             transitSummaryStr: cat.key === 'transit' ? this.transitSummary(transitBreakdown, t) : '',
+            parkSummaryStr: cat.key === 'park' ? this.parkSummary(parkBreakdown, t) : '',
             marketNote: cat.key === 'market' ? t.marketNote : null,
-            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health' || cat.key === 'transit') && !!cat.score_breakdown,
+            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park') && !!cat.score_breakdown,
             proximityStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown ? (cat.key === 'school'
               ? this.fmtSchoolBreakdownScore(cat.score_breakdown.proximity_points)
               : this.fmtScore(cat.score_breakdown.proximity_points)) : '',
@@ -1438,13 +1573,27 @@
             transitRailWeekday: hasRailTransit ? this.fmtTransitDeparture(transitBreakdown.best_rail_weekday_departures) : '—',
             transitRailSaturday: hasRailTransit ? this.fmtTransitDeparture(transitBreakdown.best_rail_saturday_departures) : '—',
             transitRailSunday: hasRailTransit ? this.fmtTransitDeparture(transitBreakdown.best_rail_sunday_departures) : '—',
+            hasParkWinner: !!parkWinner, noParkWinner: cat.key === 'park' && !parkWinner,
+            parkPrimaryPointsStr: parkBreakdown ? this.fmtParkValue(parkBreakdown.primary_points) : '—',
+            parkChoicePointsStr: parkBreakdown ? this.fmtParkValue(parkBreakdown.choice_points) : '—',
+            parkSecondaryPointsStr: parkBreakdown ? this.fmtParkValue(parkBreakdown.secondary_points) : '—',
+            parkChoiceCountStr: parkBreakdown ? t.parkChoiceCount(Number.isFinite(parkBreakdown.choice && parkBreakdown.choice.distinct_alternative_identity_count) ? parkBreakdown.choice.distinct_alternative_identity_count : 0) : '',
+            parkSecondaryCountStr: parkBreakdown ? t.parkSecondaryCount(Number.isFinite(parkBreakdown.secondary && parkBreakdown.secondary.contributing_candidate_count) ? parkBreakdown.secondary.contributing_candidate_count : 0) : '',
+            parkPrimaryMaxStr: this.fmtParkValue(7.5), parkSecondaryMaxStr: this.fmtParkValue(0.5),
+            parkTotalStr: cat.key === 'park' ? this.fmtParkValue(cat.score) : '',
+            parkWinnerName: parkWinner ? this.parkName(parkWinner, t) : '',
+            parkWinnerClass: parkWinner ? this.parkClassLabel(parkWinner.park_class, t) : '',
+            parkWinnerDistance: parkWinner ? t.straightLine + ' ' + this.fmtParkDistance(parkWinner.distance_m) : '',
+            parkWinnerArea: parkWinner ? this.fmtParkArea(parkWinner.area_m2, t) : '',
             toggleInfo: () => cat.key === 'school'
               ? this.setState({ schoolInfoOpen: !this.state.schoolInfoOpen })
               : (cat.key === 'health'
                   ? this.setState({ healthInfoOpen: !this.state.healthInfoOpen })
                   : (cat.key === 'transit'
                       ? this.setState({ transitInfoOpen: !this.state.transitInfoOpen })
-                      : this.setState({ marketInfoOpen: !this.state.marketInfoOpen }))),
+                      : (cat.key === 'park'
+                          ? this.setState({ parkInfoOpen: !this.state.parkInfoOpen })
+                          : this.setState({ marketInfoOpen: !this.state.marketInfoOpen })))),
             limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
             chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
             toggle: () => this.setState({ open: open ? null : cat.key }),
@@ -1461,15 +1610,18 @@
             rows: cat.items.map((it, i) => {
               const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
               return {
-                name: it.name,
+                name: cat.key === 'park' ? this.parkName(it, t) : it.name,
                 typeStr: cat.key === 'school'
                   ? (t.schoolTypes[it.type] || it.type || '')
                   : (cat.key === 'health'
                       ? (t.healthTypes[it.type] || it.type || '')
                       : (cat.key === 'transit'
                           ? (t.transitDisplayTypes[it.display_type] || t.transitDisplayTypes.transit_point)
-                          : (it.type || ''))),
-                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit') ? 'none' : 'capitalize' },
+                          : (cat.key === 'park'
+                              ? this.parkClassLabel(it.park_class, t)
+                              : (it.type || '')))),
+                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park') ? 'none' : 'capitalize' },
+                areaStr: cat.key === 'park' ? this.fmtParkArea(it.area_m2, t) : '',
                 straightStr: t.straightLine + ' ' + this.fmtDist(straight),
                 walkStr: t.estimatedWalk + ' ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
                 driveStr: t.estimatedDrive + ' ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,
