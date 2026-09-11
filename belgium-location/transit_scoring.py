@@ -6,6 +6,7 @@ import math
 
 
 LOCAL_SCORING_RADIUS_M = 1000.0
+LOCAL_FULL_CREDIT_DISTANCE_M = 250.0
 RAIL_SCORING_RADIUS_M = 7500.0
 LOCAL_SERVICE_SATURATION = 90.0
 RAIL_SERVICE_SATURATION = 350.0
@@ -45,9 +46,19 @@ def distance_factor(distance_m, radius_m):
     return max(0.0, 1.0 - distance / radius)
 
 
+def local_distance_factor(distance_m):
+    """Return full credit through 250 m, then decay to zero at 1 km."""
+    distance = _nonnegative(distance_m)
+    if distance <= LOCAL_FULL_CREDIT_DISTANCE_M:
+        return 1.0
+    decay_span = LOCAL_SCORING_RADIUS_M - LOCAL_FULL_CREDIT_DISTANCE_M
+    return max(0.0, min(
+        1.0, 1.0 - (distance - LOCAL_FULL_CREDIT_DISTANCE_M) / decay_span))
+
+
 def local_utility(seven_day_average, distance_m):
     return (local_service_factor(seven_day_average)
-            * distance_factor(distance_m, LOCAL_SCORING_RADIUS_M))
+            * local_distance_factor(distance_m))
 
 
 def rail_utility(seven_day_average, distance_m):
@@ -62,6 +73,10 @@ def _ranked_candidate(candidate, utility_function, radius_m, id_field):
         return None
     service = _nonnegative(candidate.get("seven_day_average"))
     utility = utility_function(service, distance)
+    candidate_distance_factor = (
+        local_distance_factor(distance)
+        if radius_m == LOCAL_SCORING_RADIUS_M
+        else distance_factor(distance, radius_m))
     enriched = dict(candidate)
     enriched.update({
         "distance_m": distance,
@@ -69,7 +84,7 @@ def _ranked_candidate(candidate, utility_function, radius_m, id_field):
         "service_factor": (local_service_factor(service)
                            if radius_m == LOCAL_SCORING_RADIUS_M
                            else rail_service_factor(service)),
-        "distance_factor": distance_factor(distance, radius_m),
+        "distance_factor": candidate_distance_factor,
         "utility": utility,
     })
     # Utilities that differ below floating-point noise use the documented

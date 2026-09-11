@@ -240,5 +240,110 @@ class TransitParquetIntegrationTests(unittest.TestCase):
             app.calc_category_score("transit", 10, 50)
 
 
+class RealBelgiumTransitIntegrationTests(unittest.TestCase):
+    cache_dir = SOURCE_DIR / "cache"
+    nodes = cache_dir / "be_poi.parquet"
+    polygons = cache_dir / "be_poi_poly.parquet"
+    stops = cache_dir / "be_transit_service_stops.parquet"
+    summary = cache_dir / "be_transit_service_summary.parquet"
+    rail = cache_dir / "be_rail_service.parquet"
+    required_caches = (stops, summary, rail)
+
+    locations = {
+        "Gijmelstraat": (
+            51.0034977, 4.8405107, "Aarschot Lindekensstraat", "Aarschot",
+            4.770420569307268, 2.253276758092536, 7.023697327399804, 7.0),
+        "Leuven": (
+            50.8795, 4.7023, "Leuven Rector De Somerplein perron A", "Louvain",
+            6.0, 3.466191754161318, 9.466191754161319, 9.5),
+        "Grote Markt Aarschot": (
+            50.9843, 4.8367, "Aarschot Demervallei", "Aarschot",
+            5.9714285714285715, 2.930842919701698,
+            8.90227149113027, 8.9),
+        "Scherpenheuvel": (
+            50.9949, 4.9778, "Zichem Mollenveldwijk", "Zichem",
+            1.1982294344131592, 1.9744411250160392,
+            3.172670559429198, 3.2),
+        "Diepenstraat Langdorp": (
+            51.0129, 4.8930, "Langdorp Klein Opperstraat", "Langdorp",
+            0.29070493662568314, 1.681867049049531,
+            1.9725719856752142, 2.0),
+    }
+
+    @unittest.skipUnless(
+        all(path.is_file() for path in required_caches),
+        "real Belgium Transit service caches are not available")
+    def test_core_locations_match_calibrated_full_precision_results(self):
+        with duckdb.connect() as con:
+            for name, expected in self.locations.items():
+                (lat, lon, local_name, rail_name, local_points, rail_points,
+                 score, public_score) = expected
+                with self.subTest(location=name):
+                    local_rows = app.query_transit_local_candidates(
+                        con, str(self.stops), str(self.summary), lat, lon)
+                    rail_rows = app.query_transit_rail_candidates(
+                        con, str(self.rail), lat, lon)
+                    components = app.transit_score_components(
+                        local_rows, rail_rows)
+                    self.assertEqual(components["best_local_name"], local_name)
+                    self.assertEqual(components["best_rail_name"], rail_name)
+                    self.assertAlmostEqual(
+                        components["local_access_points"], local_points, places=9)
+                    self.assertAlmostEqual(
+                        components["rail_access_points"], rail_points, places=9)
+                    self.assertAlmostEqual(components["score"], score, places=9)
+                    self.assertEqual(components["public_score"], public_score)
+
+    @unittest.skipUnless(
+        all(path.is_file() for path in required_caches),
+        "real Belgium Transit service caches are not available")
+    def test_gijmelstraat_breakdown_and_flex_exclusion(self):
+        with duckdb.connect() as con:
+            local_rows = app.query_transit_local_candidates(
+                con, str(self.stops), str(self.summary), 51.0034977, 4.8405107)
+            rail_rows = app.query_transit_rail_candidates(
+                con, str(self.rail), 51.0034977, 4.8405107)
+        self.assertFalse(any(
+            "gijmelberglaan" in str(row.get("name") or "").casefold()
+            for row in local_rows))
+        components = app.transit_score_components(local_rows, rail_rows)
+        self.assertAlmostEqual(components["best_local_distance_m"],
+                               295.1770734841513, places=6)
+        self.assertEqual(components["best_local_weekday_departures"], 84.0)
+        self.assertEqual(components["best_local_saturday_departures"], 57.0)
+        self.assertEqual(components["best_local_sunday_departures"], 56.0)
+        self.assertAlmostEqual(components["best_local_seven_day_average"],
+                               76.14285714285714, places=12)
+        self.assertAlmostEqual(components["best_local_service_factor"],
+                               0.846031746031746, places=12)
+        self.assertAlmostEqual(components["best_local_distance_factor"],
+                               0.9397639020211316, places=12)
+
+    @unittest.skipUnless(
+        all(path.is_file() for path in required_caches)
+        and (nodes.is_file() or polygons.is_file()),
+        "real Belgium Transit and POI caches are not available")
+    def test_gijmelstraat_score_is_display_radius_invariant(self):
+        nodes = str(self.nodes) if self.nodes.is_file() else None
+        polygons = str(self.polygons) if self.polygons.is_file() else None
+        results = []
+        with duckdb.connect() as con:
+            for radius in (1000, 2500, 5000):
+                results.append(app.analyze_transit(
+                    con, nodes, polygons, str(self.stops), str(self.summary),
+                    str(self.rail), 51.0034977, 4.8405107, radius, 1000))
+        components = [result[4] for result in results]
+        invariant_fields = (
+            "score", "local_access_points", "rail_access_points",
+            "best_local_logical_stop_id", "best_local_distance_m",
+            "best_rail_logical_station_id", "best_rail_distance_m",
+        )
+        for field in invariant_fields:
+            self.assertEqual([item[field] for item in components],
+                             [components[0][field]] * 3)
+        self.assertLess(results[0][2], results[1][2])
+        self.assertLess(results[1][2], results[2][2])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -50,14 +50,36 @@ class LocalMathTests(unittest.TestCase):
         self.assertEqual(transit.local_service_factor(90), 1.0)
         self.assertEqual(transit.local_service_factor(900), 1.0)
 
-    def test_distance_factor_boundaries(self):
-        self.assertEqual(transit.distance_factor(0, 1000), 1.0)
-        self.assertEqual(transit.distance_factor(500, 1000), 0.5)
-        self.assertEqual(transit.distance_factor(1000, 1000), 0.0)
-        self.assertEqual(transit.distance_factor(1001, 1000), 0.0)
+    def test_local_distance_factor_calibration_values(self):
+        expected = {
+            0: 1.0,
+            100: 1.0,
+            200: 1.0,
+            250: 1.0,
+            300: 14 / 15,
+            400: 0.8,
+            500: 2 / 3,
+            600: 8 / 15,
+            750: 1 / 3,
+            900: 2 / 15,
+            1000: 0.0,
+            1001: 0.0,
+        }
+        for distance, factor in expected.items():
+            with self.subTest(distance=distance):
+                self.assertAlmostEqual(
+                    transit.local_distance_factor(distance), factor)
+
+    def test_local_distance_factor_exact_boundaries(self):
+        self.assertEqual(transit.local_distance_factor(249.999), 1.0)
+        self.assertEqual(transit.local_distance_factor(250), 1.0)
+        self.assertLess(transit.local_distance_factor(250.001), 1.0)
+        self.assertGreater(transit.local_distance_factor(999.999), 0.0)
+        self.assertEqual(transit.local_distance_factor(1000), 0.0)
+        self.assertEqual(transit.local_distance_factor(1000.001), 0.0)
 
     def test_utility_multiplies_service_and_distance(self):
-        self.assertEqual(transit.local_utility(45, 500), 0.25)
+        self.assertAlmostEqual(transit.local_utility(45, 500), 1 / 3)
 
     def test_best_candidate_uses_utility_not_distance(self):
         winner = transit.select_best_local([
@@ -66,7 +88,7 @@ class LocalMathTests(unittest.TestCase):
 
     def test_tie_breaks_by_distance_then_service_then_id(self):
         winner = transit.select_best_local([
-            local("far", 500, 90), local("near", 0, 45)])
+            local("far", 625, 90), local("near", 0, 45)])
         self.assertEqual(winner["logical_stop_id"], "near")
         stable = transit.select_best_local([
             local("z", 100, 50), local("a", 100, 50)])
