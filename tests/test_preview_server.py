@@ -3,6 +3,8 @@ import sys
 import unittest
 from unittest.mock import patch
 
+import pandas as pd
+
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
 sys.path.insert(0, str(SOURCE_DIR))
@@ -284,6 +286,92 @@ class RadiusReanalysisApiTests(unittest.TestCase):
             breakdowns[0]["clinical_proximity_points"]
             + breakdowns[0]["choice_points"] + breakdowns[0]["hospital_points"],
             health_categories[0]["score"], places=1)
+
+
+class TransitPreviewContractTests(unittest.TestCase):
+    def setUp(self):
+        server._result_cache.clear()
+
+    @staticmethod
+    def breakdown():
+        return {
+            "local_access_points": 4.770420569307268,
+            "rail_access_points": 2.253276758092536,
+            "local_scoring_radius_m": 1000,
+            "rail_scoring_radius_m": 7500,
+            "best_local_name": "Unique Local Winner",
+            "best_local_distance_m": 295.1770734841513,
+            "best_local_weekday_departures": 84.0,
+            "best_local_saturday_departures": 57.0,
+            "best_local_sunday_departures": 56.0,
+            "best_rail_name": "Unique Rail Winner",
+            "best_rail_distance_m": 2415.282592945211,
+            "best_rail_weekday_departures": 169.0,
+            "best_rail_saturday_departures": 30.0,
+            "best_rail_sunday_departures": 30.0,
+        }
+
+    @staticmethod
+    def legacy_frame():
+        return pd.DataFrame([{
+            "n_total": 140, "d_min": 149.0,
+            "name": "Legacy Gijmelberglaan", "brand": None,
+            "lat": 51.0042, "lon": 4.8423, "d_lin": 149.0,
+            "walk_m": 186.0, "walk_s": 120.0,
+            "drive_m": 209.0, "drive_s": 30.0,
+        }])
+
+    def test_run_preview_analysis_forwards_synthetic_transit_breakdown_unchanged(self):
+        breakdown = self.breakdown()
+        scores = {config["label"]: 5.0 for config in server.CATS.values()}
+        scores[server.CATS["transit"]["label"]] = 7.0
+        analysis = {"overall": 6.0, "scores": scores,
+                    "breakdowns": {"transit": breakdown}}
+
+        def category_payload(_con, category, _lat, _lon, _radius, _topn,
+                             score, transit_breakdown=None):
+            return {
+                "key": category, "score": score, "count": 140,
+                "nearest_m": 149, "items": [{"name": "Legacy item"}],
+                "score_breakdown": transit_breakdown,
+            }
+
+        with (patch.object(server, "analyze_location", return_value=analysis),
+              patch.object(server, "_category_payload",
+                           side_effect=category_payload)):
+            payload = server._run_preview_analysis(
+                51.0034977, 4.8405107, "Gijmelstraat", 2500, 20, "en")
+
+        transit = next(category for category in payload["categories"]
+                       if category["key"] == "transit")
+        self.assertIs(transit["score_breakdown"], breakdown)
+        self.assertEqual(transit["score_breakdown"], self.breakdown())
+
+    def test_transit_legacy_fields_and_authoritative_breakdown_remain_independent(self):
+        breakdown = self.breakdown()
+        with patch.object(server, "query_category",
+                          return_value=self.legacy_frame()):
+            payload = server._category_payload(
+                object(), "transit", 51.0034977, 4.8405107,
+                2500, 20, 7.0, breakdown)
+
+        self.assertIs(payload["score_breakdown"], breakdown)
+        self.assertEqual(payload["nearest_m"], 149)
+        self.assertEqual(payload["score_breakdown"]["best_local_distance_m"],
+                         295.1770734841513)
+        self.assertEqual(payload["count"], 140)
+        self.assertEqual(payload["items"][0]["name"],
+                         "Legacy Gijmelberglaan")
+
+    def test_missing_transit_breakdown_is_safe_and_not_fabricated(self):
+        with patch.object(server, "query_category",
+                          return_value=self.legacy_frame()):
+            payload = server._category_payload(
+                object(), "transit", 51.0034977, 4.8405107,
+                2500, 20, 7.0)
+        self.assertIsNone(payload["score_breakdown"])
+        self.assertEqual(payload["nearest_m"], 149)
+        self.assertEqual(payload["count"], 140)
 
 
 class SchoolExplanationContentTests(unittest.TestCase):

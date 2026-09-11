@@ -258,7 +258,8 @@ def _school_score_breakdown(con, lat, lon):
     }
 
 
-def _category_payload(con, category, lat, lon, radius, topn, score):
+def _category_payload(con, category, lat, lon, radius, topn, score,
+                      transit_breakdown=None):
     if category == "market":
         frame, _market_score, count, nearest = analyze_market(
             con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
@@ -281,7 +282,7 @@ def _category_payload(con, category, lat, lon, radius, topn, score):
         frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0
         nearest = float(frame.iloc[0]["d_min"]) if not frame.empty else None
-        score_breakdown = None
+        score_breakdown = transit_breakdown if category == "transit" else None
     items = []
     for _, row in frame.iterrows():
         poi_type = next((_value(row.get(column)) for column in
@@ -316,7 +317,9 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
     with duckdb.connect() as con:
         categories = [
             _category_payload(con, category, lat, lon, radius, topn,
-                              result["scores"][CATS[category]["label"]])
+                              result["scores"][CATS[category]["label"]],
+                              result.get("breakdowns", {}).get("transit")
+                              if category == "transit" else None)
             for category in CATS
         ]
     payload = {"display_address": display_address, "lat": lat, "lon": lon,
