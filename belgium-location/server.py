@@ -226,6 +226,34 @@ def _value(value):
     return None if pd.isnull(value) else value
 
 
+def _transit_display_type(row):
+    """Classify display-only Transit infrastructure from preserved OSM tags."""
+    def tag(column):
+        value = _value(row.get(column))
+        return str(value).strip().casefold() if value is not None else ""
+
+    amenity = tag("amenity")
+    railway = tag("railway")
+    highway = tag("highway")
+    public_transport = tag("public_transport")
+
+    if amenity == "bus_station":
+        return "bus_station"
+    if railway == "station":
+        return "rail_station"
+    if railway == "halt":
+        return "rail_halt"
+    if railway == "tram_stop":
+        return "tram_stop"
+    if highway == "bus_stop":
+        return "bus_stop"
+    if public_transport == "platform" or railway == "platform" or highway == "platform":
+        return "transit_platform"
+    if public_transport == "stop_position":
+        return "transit_stop"
+    return "transit_point"
+
+
 def _market_score_breakdown(con, lat, lon, score):
     """Describe the existing Market score without changing its calculation."""
     scoring_rows = deduplicate_market_pois(query_market_candidates(
@@ -289,7 +317,7 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
                          ("shop", "amenity", "healthcare", "railway", "highway",
                           "public_transport", "leisure", "sport")
                          if _value(row.get(column))), None)
-        items.append({
+        item = {
             "name": _value(row["name"]) or _value(row["brand"]) or "Unnamed",
             "brand": _value(row["brand"]),
             "type": poi_type,
@@ -297,7 +325,10 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
             "straight_m": int(round(row["d_lin"])),
             "walk_m": int(round(row["walk_m"])), "walk_min": int(round(row["walk_s"] / 60)),
             "drive_m": int(round(row["drive_m"])), "drive_min": int(round(row["drive_s"] / 60)),
-        })
+        }
+        if category == "transit":
+            item["display_type"] = _transit_display_type(row)
+        items.append(item)
     return {"key": category, "score": score, "count": count,
             "nearest_m": int(round(nearest)) if nearest is not None else None,
             "has_hospital": bool(frame.iloc[0]["has_hospital_any"]) if category == "health" and not frame.empty else None,

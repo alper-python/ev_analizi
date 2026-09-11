@@ -316,6 +316,8 @@ class TransitPreviewContractTests(unittest.TestCase):
         return pd.DataFrame([{
             "n_total": 140, "d_min": 149.0,
             "name": "Legacy Gijmelberglaan", "brand": None,
+            "amenity": None, "railway": None, "highway": "bus_stop",
+            "public_transport": "platform",
             "lat": 51.0042, "lon": 4.8423, "d_lin": 149.0,
             "walk_m": 186.0, "walk_s": 120.0,
             "drive_m": 209.0, "drive_s": 30.0,
@@ -362,6 +364,7 @@ class TransitPreviewContractTests(unittest.TestCase):
         self.assertEqual(payload["count"], 140)
         self.assertEqual(payload["items"][0]["name"],
                          "Legacy Gijmelberglaan")
+        self.assertEqual(payload["items"][0]["display_type"], "bus_stop")
 
     def test_missing_transit_breakdown_is_safe_and_not_fabricated(self):
         with patch.object(server, "query_category",
@@ -372,6 +375,23 @@ class TransitPreviewContractTests(unittest.TestCase):
         self.assertIsNone(payload["score_breakdown"])
         self.assertEqual(payload["nearest_m"], 149)
         self.assertEqual(payload["count"], 140)
+
+    def test_transit_display_classification_uses_only_preserved_source_tags(self):
+        cases = (
+            ({"amenity": "bus_station"}, "bus_station"),
+            ({"railway": "station"}, "rail_station"),
+            ({"railway": "halt"}, "rail_halt"),
+            ({"railway": "tram_stop"}, "tram_stop"),
+            ({"highway": "bus_stop"}, "bus_stop"),
+            ({"public_transport": "platform"}, "transit_platform"),
+            ({"public_transport": "stop_position"}, "transit_stop"),
+            ({"railway": "subway_entrance"}, "transit_point"),
+            ({}, "transit_point"),
+            ({"public_transport": "unexpected"}, "transit_point"),
+        )
+        for tags, expected in cases:
+            with self.subTest(tags=tags):
+                self.assertEqual(server._transit_display_type(tags), expected)
 
 
 class SchoolExplanationContentTests(unittest.TestCase):
@@ -414,9 +434,10 @@ class SchoolExplanationContentTests(unittest.TestCase):
 
     def test_non_school_non_health_poi_types_keep_existing_raw_rendering(self):
         self.assertIn(
-            ": (cat.key === 'health' ? (t.healthTypes[it.type] || it.type || '') : (it.type || ''))",
+            ": (cat.key === 'transit'",
             self.frontend,
         )
+        self.assertIn(": (it.type || '')))", self.frontend)
 
 
 class HealthExplanationContentTests(unittest.TestCase):
@@ -508,11 +529,11 @@ class HealthExplanationContentTests(unittest.TestCase):
 
     def test_health_type_translation_is_reactive_and_has_raw_fallback(self):
         self.assertIn(
-            "cat.key === 'health' ? (t.healthTypes[it.type] || it.type || '')",
+            "? (t.healthTypes[it.type] || it.type || '')",
             self.frontend,
         )
         self.assertIn(
-            "textTransform: (cat.key === 'school' || cat.key === 'health') ? 'none' : 'capitalize'",
+            "textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit') ? 'none' : 'capitalize'",
             self.frontend,
         )
 
@@ -523,6 +544,160 @@ class HealthExplanationContentTests(unittest.TestCase):
         )
         self.assertIn(
             "The School score is always calculated using education options within a 2.5 km radius.",
+            self.frontend,
+        )
+
+
+class TransitExplanationContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_frontend_references_authoritative_transit_breakdown_fields(self):
+        for field in (
+            "local_access_points", "rail_access_points",
+            "best_local_logical_stop_id", "best_local_name",
+            "best_local_distance_m", "best_local_weekday_departures",
+            "best_local_saturday_departures", "best_local_sunday_departures",
+            "best_local_operators", "best_local_modes",
+            "best_rail_logical_station_id", "best_rail_name",
+            "best_rail_distance_m", "best_rail_weekday_departures",
+            "best_rail_saturday_departures", "best_rail_sunday_departures",
+        ):
+            self.assertIn("transitBreakdown." + field, self.frontend)
+
+    def test_collapsed_summary_uses_scoring_distances_not_legacy_fields(self):
+        start = self.frontend.index("transitSummary(breakdown, t)")
+        end = self.frontend.index("scoreColor(s)", start)
+        summary = self.frontend[start:end]
+        self.assertIn("breakdown.best_local_distance_m", summary)
+        self.assertIn("breakdown.best_rail_distance_m", summary)
+        self.assertNotIn("nearest_m", summary)
+        self.assertNotIn("count", summary)
+
+    def test_transit_component_and_departure_labels_exist_in_all_languages(self):
+        for text in (
+            "Düzenli toplu taşıma", "Tren erişimi",
+            "Regulier openbaar vervoer", "Treinbereikbaarheid",
+            "Scheduled local transit", "Rail access",
+            "Tipik seferler (06:00–22:00)",
+            "Typische vertrekken (06:00–22:00)",
+            "Typical departures (06:00–22:00)",
+            "Hafta içi", "Weekdag", "Weekday",
+            "Cumartesi", "Zaterdag", "Saturday",
+            "Pazar", "Zondag", "Sunday",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_best_usable_rail_wording_exists_in_all_languages(self):
+        for text in (
+            "En kullanışlı tren istasyonu",
+            "Meest bruikbare treinstation",
+            "Best usable rail station",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_simplified_explanation_exists_in_all_languages(self):
+        for text in (
+            "1 km içindeki en kullanışlı düzenli durak değerlendirilir.",
+            "250 metreye kadar mesafe açısından tam değer alınır",
+            "7,5 km içindeki tren istasyonları mesafe ve tarifeli tren sıklığı",
+            "The most useful regular scheduled stop within 1 km is evaluated.",
+            "Distance receives full credit through 250 m",
+            "Rail stations within 7.5 km are compared",
+            "De meest bruikbare reguliere halte binnen 1 km wordt beoordeeld.",
+            "Afstand krijgt volledige waarde tot 250 m",
+            "Treinstations binnen 7,5 km worden vergeleken",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_engineering_details_are_removed_from_visible_explanation(self):
+        for text in (
+            "beş kat ağırlık", "yaklaşık 90 sefer",
+            "azalan getiriye", "five-day weight",
+            "weighted 90 departures", "diminishing returns",
+            "vijf keer mee", "gewogen 90 vertrekken",
+            "neemt geleidelijk af",
+        ):
+            self.assertNotIn(text, self.frontend)
+
+    def test_flex_and_display_radius_explanations_exist_in_all_languages(self):
+        for text in (
+            "Flex / talebe bağlı ulaşım sayısal puana dahil değildir.",
+            "Flex / vervoer op aanvraag telt niet mee in de numerieke score.",
+            "Flex / on-demand transport is not included in the numeric score.",
+            "gösterim yarıçapını değiştirmek Ulaşım skorunu değiştirmez",
+            "weergavestraal van 1 / 2,5 / 5 km verandert de vervoersscore niet",
+            "display radius does not change the Transit score",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_null_candidate_states_are_localized(self):
+        for text in (
+            "1 km içinde puanlamaya uygun düzenli toplu taşıma bulunamadı.",
+            "7,5 km içinde puanlamaya uygun tren istasyonu bulunamadı.",
+            "Geen regulier openbaar vervoer voor de score gevonden binnen 1 km.",
+            "Geen geschikt treinstation voor de score gevonden binnen 7,5 km.",
+            "No qualifying scheduled local transit found within 1 km.",
+            "No qualifying rail station found within 7.5 km.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_authoritative_total_is_not_recomputed_from_components(self):
+        self.assertIn(
+            "transitTotalStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : ''",
+            self.frontend,
+        )
+        self.assertIn(
+            "scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : this.fmtScore(cat.score)",
+            self.frontend,
+        )
+        self.assertNotIn(
+            "transitBreakdown.local_access_points + transitBreakdown.rail_access_points",
+            self.frontend,
+        )
+
+    def test_legacy_list_is_explicitly_display_only_in_all_languages(self):
+        for text in (
+            "Haritada gösterilen ulaşım noktaları",
+            "Vervoerspunten op de kaart",
+            "Transit points shown on map",
+            "sayısal skorun hesaplama dökümü değildir",
+            "niet de berekening van de numerieke score",
+            "not the numeric score breakdown",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_mode_labels_use_existing_reactive_translation_object(self):
+        for mapping in (
+            "transitModes: { BUS: 'Otobüs', TRAM: 'Tramvay', METRO: 'Metro', LIGHT_RAIL: 'Hafif raylı sistem', RAIL: 'Tren' }",
+            "transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Light rail', RAIL: 'Rail' }",
+            "transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Lightrail', RAIL: 'Trein' }",
+        ):
+            self.assertIn(mapping, self.frontend)
+        self.assertIn("t.transitModes[key] || mode", self.frontend)
+
+    def test_transit_display_types_are_localized_with_generic_fallback(self):
+        for mapping in (
+            "bus_stop: 'Otobüs durağı', bus_station: 'Otobüs istasyonu', rail_station: 'Raylı sistem istasyonu', rail_halt: 'Tren durağı', tram_stop: 'Tramvay durağı', transit_platform: 'Toplu taşıma peronu', transit_stop: 'Ulaşım durağı', transit_point: 'Ulaşım noktası'",
+            "bus_stop: 'Bushalte', bus_station: 'Busstation', rail_station: 'Railstation', rail_halt: 'Treinhalte', tram_stop: 'Tramhalte', transit_platform: 'OV-perron', transit_stop: 'Vervoershalte', transit_point: 'Vervoerspunt'",
+            "bus_stop: 'Bus stop', bus_station: 'Bus station', rail_station: 'Rail station', rail_halt: 'Railway halt', tram_stop: 'Tram stop', transit_platform: 'Transit platform', transit_stop: 'Transit stop', transit_point: 'Transit point'",
+        ):
+            self.assertIn(mapping, self.frontend)
+        self.assertNotIn("metro_station:", self.frontend)
+        self.assertIn(
+            "t.transitDisplayTypes[it.display_type] || t.transitDisplayTypes.transit_point",
+            self.frontend,
+        )
+
+    def test_transit_rows_never_render_raw_backend_type(self):
+        self.assertIn(
+            "? (t.transitDisplayTypes[it.display_type] || t.transitDisplayTypes.transit_point)",
+            self.frontend,
+        )
+        self.assertNotIn(
+            "? (t.transitDisplayTypes[it.display_type] || it.type",
             self.frontend,
         )
 

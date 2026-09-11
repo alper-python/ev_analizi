@@ -583,6 +583,8 @@ def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
     base_src = " UNION ALL ".join(parts)
 
     # not: 'is_hospital' ve window fonksiyonları ile n_total, d_min ve has_hospital_any de getiriyoruz
+    transit_display_columns = (
+        ", railway, highway, public_transport" if cat == "transit" else "")
     q = f"""
     WITH base AS (
       SELECT * FROM ({base_src})
@@ -619,7 +621,7 @@ def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
         ROW_NUMBER() OVER (ORDER BY score DESC, d_lin ASC) AS rn_all
       FROM scored
     )
-    SELECT name, brand, amenity, shop, healthcare,
+    SELECT name, brand, amenity, shop, healthcare{transit_display_columns},
            lat, lon, score, d_lin, d_min, n_total, has_hospital_any,
            walk_m, walk_s, drive_m, drive_s
     FROM ranked

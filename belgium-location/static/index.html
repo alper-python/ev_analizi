@@ -102,6 +102,18 @@
                 gap: 6px;
                 margin: 9px 0
             }
+            .transit-breakdown-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px
+            }
+            .transit-departure-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 5px;
+                margin-top: 9px
+            }
+            .transit-winner-name { overflow-wrap: anywhere }
             .language-picker {
                 display: inline-flex;
                 align-items: center;
@@ -168,6 +180,7 @@
 
             @media (max-width: 520px) {
                 .poi-distances { flex-direction: column; align-items: flex-start; gap: 4px }
+                .transit-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
             }
         </style>
     </helmet>
@@ -460,8 +473,11 @@
                                                     <div style="{{ cat.barStyle }}"></div>
                                                 </div>
                                                 <div style="display:flex;gap:8px;align-items:center;font:600 12px Manrope;color:var(--muted);flex-wrap:wrap">
-                                                    <sc-if value="{{ cat.isNonHealth }}" hint-placeholder-val="{{ true }}">
+                                                    <sc-if value="{{ cat.isGenericSummary }}" hint-placeholder-val="{{ true }}">
                                                         <span>{{ cat.countStr }}</span><span>·</span><span>{{ cat.nearestStr }}</span>
+                                                    </sc-if>
+                                                    <sc-if value="{{ cat.isTransit }}" hint-placeholder-val="{{ false }}">
+                                                        <span>{{ cat.transitSummaryStr }}</span>
                                                     </sc-if>
                                                     <sc-if value="{{ cat.isHealth }}" hint-placeholder-val="{{ false }}">
                                                         <span>{{ cat.healthCountStr }}</span>
@@ -536,8 +552,74 @@
                                                 </sc-if>
                                             </div>
                                         </sc-if>
+                                        <sc-if value="{{ cat.isTransit }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:0 16px 11px 66px">
+                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.transitHow }}</button>
+                                                <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                        <div><strong style="color:var(--ink)">{{ t.transitLocalLabel }}:</strong> {{ t.transitLocalExplanation }}</div>
+                                                        <div style="margin-top:6px"><strong style="color:var(--ink)">{{ t.transitRailLabel }}:</strong> {{ t.transitRailExplanation }}</div>
+                                                        <div style="margin-top:6px">{{ t.transitTotalExplanation }}</div>
+                                                        <div style="margin-top:6px">{{ t.transitFlexNote }}</div>
+                                                        <div style="margin-top:6px">{{ t.transitDisplayNote }}</div>
+                                                        <div style="margin-top:6px">{{ t.transitLimitations }}</div>
+                                                    </div>
+                                                </sc-if>
+                                            </div>
+                                        </sc-if>
                                         <sc-if value="{{ cat.isOpen }}" hint-placeholder-val="{{ false }}">
                                             <div style="border-top:1px solid var(--line)">
+                                                <sc-if value="{{ cat.isTransit }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="padding:13px 16px;background:var(--bg);border-bottom:1px solid var(--line)">
+                                                        <div class="transit-breakdown-grid">
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12.5px Manrope;color:var(--ink)">{{ t.transitLocalLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#7C4DBE;white-space:nowrap">{{ cat.transitLocalPointsStr }} / 6</strong>
+                                                                </div>
+                                                                <sc-if value="{{ cat.hasLocalTransit }}" hint-placeholder-val="{{ true }}">
+                                                                    <div style="margin-top:9px;font:600 10.5px Manrope;color:var(--muted)">{{ t.transitBestLocalStop }}</div>
+                                                                    <div class="transit-winner-name" style="font:800 13px/1.4 Manrope;color:var(--ink)">{{ cat.transitLocalName }}</div>
+                                                                    <div style="margin-top:3px;font:600 11.5px Manrope;color:var(--muted)">{{ cat.transitLocalDistanceStr }}</div>
+                                                                    <sc-if value="{{ cat.transitLocalMetaStr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:3px;font:600 11px/1.4 Manrope;color:var(--muted)">{{ cat.transitLocalMetaStr }}</div></sc-if>
+                                                                    <div style="margin-top:9px;font:700 10.5px Manrope;color:var(--muted)">{{ t.transitDepartures }}</div>
+                                                                    <div class="transit-departure-grid">
+                                                                        <div style="padding:6px;border-radius:6px;background:var(--chip)"><span style="display:block;font:600 9.5px Manrope;color:var(--muted)">{{ t.transitWeekday }}</span><strong>{{ cat.transitLocalWeekday }}</strong></div>
+                                                                        <div style="padding:6px;border-radius:6px;background:var(--chip)"><span style="display:block;font:600 9.5px Manrope;color:var(--muted)">{{ t.transitSaturday }}</span><strong>{{ cat.transitLocalSaturday }}</strong></div>
+                                                                        <div style="padding:6px;border-radius:6px;background:var(--chip)"><span style="display:block;font:600 9.5px Manrope;color:var(--muted)">{{ t.transitSunday }}</span><strong>{{ cat.transitLocalSunday }}</strong></div>
+                                                                    </div>
+                                                                </sc-if>
+                                                                <sc-if value="{{ cat.noLocalTransit }}" hint-placeholder-val="{{ false }}"><div style="margin-top:9px;font:600 11.5px/1.5 Manrope;color:var(--muted)">{{ t.transitNoLocal }}</div></sc-if>
+                                                            </div>
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12.5px Manrope;color:var(--ink)">{{ t.transitRailLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#7C4DBE;white-space:nowrap">{{ cat.transitRailPointsStr }} / 4</strong>
+                                                                </div>
+                                                                <sc-if value="{{ cat.hasRailTransit }}" hint-placeholder-val="{{ true }}">
+                                                                    <div style="margin-top:9px;font:600 10.5px Manrope;color:var(--muted)">{{ t.transitBestRail }}</div>
+                                                                    <div class="transit-winner-name" style="font:800 13px/1.4 Manrope;color:var(--ink)">{{ cat.transitRailName }}</div>
+                                                                    <div style="margin-top:3px;font:600 11.5px Manrope;color:var(--muted)">{{ cat.transitRailDistanceStr }}</div>
+                                                                    <div style="margin-top:9px;font:700 10.5px Manrope;color:var(--muted)">{{ t.transitDepartures }}</div>
+                                                                    <div class="transit-departure-grid">
+                                                                        <div style="padding:6px;border-radius:6px;background:var(--chip)"><span style="display:block;font:600 9.5px Manrope;color:var(--muted)">{{ t.transitWeekday }}</span><strong>{{ cat.transitRailWeekday }}</strong></div>
+                                                                        <div style="padding:6px;border-radius:6px;background:var(--chip)"><span style="display:block;font:600 9.5px Manrope;color:var(--muted)">{{ t.transitSaturday }}</span><strong>{{ cat.transitRailSaturday }}</strong></div>
+                                                                        <div style="padding:6px;border-radius:6px;background:var(--chip)"><span style="display:block;font:600 9.5px Manrope;color:var(--muted)">{{ t.transitSunday }}</span><strong>{{ cat.transitRailSunday }}</strong></div>
+                                                                    </div>
+                                                                </sc-if>
+                                                                <sc-if value="{{ cat.noRailTransit }}" hint-placeholder-val="{{ false }}"><div style="margin-top:9px;font:600 11.5px/1.5 Manrope;color:var(--muted)">{{ t.transitNoRail }}</div></sc-if>
+                                                            </div>
+                                                        </div>
+                                                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px;padding:9px 11px;border-radius:8px;background:rgba(124,77,190,.1)">
+                                                            <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.transitTotalLabel }}</strong>
+                                                            <strong style="font:800 16px Manrope;color:#7C4DBE">{{ cat.transitTotalStr }} / 10</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div style="padding:11px 16px;border-bottom:1px solid var(--line);background:var(--surface)">
+                                                        <div style="font:800 12px Manrope;color:var(--muted)">{{ t.transitLegacyTitle }}</div>
+                                                        <div style="margin-top:3px;font:600 10.5px/1.45 Manrope;color:var(--muted)">{{ t.transitLegacyNote }}</div>
+                                                    </div>
+                                                </sc-if>
                                                 <sc-if value="{{ cat.limitNote }}" hint-placeholder-val="{{ false }}">
                                                     <div style="padding:9px 16px;border-bottom:1px solid var(--line);font:700 11px Manrope;color:var(--muted)">{{ cat.limitNote }}</div>
                                                 </sc-if>
@@ -674,7 +756,7 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, radiusInfoOpen: false,
+          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, transitInfoOpen: false, radiusInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -713,7 +795,9 @@
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
             schoolTypes: { school: 'Okul', kindergarten: 'Anaokulu' },
             healthTypes: { clinic: 'Klinik', doctor: 'Doktor', doctors: 'Doktor', pharmacy: 'Eczane', dentist: 'Diş hekimi', hospital: 'Hastane', physiotherapist: 'Fizyoterapist', psychotherapist: 'Psikoterapist', laboratory: 'Laboratuvar', blood_donation: 'Kan bağışı' },
-            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
+            transitModes: { BUS: 'Otobüs', TRAM: 'Tramvay', METRO: 'Metro', LIGHT_RAIL: 'Hafif raylı sistem', RAIL: 'Tren' },
+            transitDisplayTypes: { bus_stop: 'Otobüs durağı', bus_station: 'Otobüs istasyonu', rail_station: 'Raylı sistem istasyonu', rail_halt: 'Tren durağı', tram_stop: 'Tramvay durağı', transit_platform: 'Toplu taşıma peronu', transit_stop: 'Ulaşım durağı', transit_point: 'Ulaşım noktası' },
+            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', transitHow: 'Nasıl hesaplanır?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
             radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
             proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
@@ -740,6 +824,22 @@
             healthClinicalSummaryNone: '2,5 km içinde klinik sağlık noktası yok',
             healthHospitalSummary: dist => 'hastane: ' + dist,
             healthHospitalSummaryNone: '20 km içinde hastane tesisi yok',
+            transitLocalSummary: dist => 'Düzenli durak: ' + dist,
+            transitRailSummary: dist => 'tren: ' + dist,
+            transitSummaryNone: 'Puanlamaya uygun düzenli ulaşım veya tren erişimi bulunamadı',
+            transitLocalLabel: 'Düzenli toplu taşıma', transitRailLabel: 'Tren erişimi', transitTotalLabel: 'Toplam',
+            transitBestLocalStop: 'Puanlamada kullanılan düzenli durak', transitBestRail: 'En kullanışlı tren istasyonu',
+            transitDepartures: 'Tipik seferler (06:00–22:00)', transitWeekday: 'Hafta içi', transitSaturday: 'Cumartesi', transitSunday: 'Pazar',
+            transitNoLocal: '1 km içinde puanlamaya uygun düzenli toplu taşıma bulunamadı.',
+            transitNoRail: '7,5 km içinde puanlamaya uygun tren istasyonu bulunamadı.',
+            transitLocalExplanation: '1 km içindeki en kullanışlı düzenli durak değerlendirilir. Puan, durağın kuş uçuşu uzaklığına ve hafta içi/hafta sonu tarifeli sefer sıklığına göre belirlenir. 250 metreye kadar mesafe açısından tam değer alınır; 1 km’ye doğru katkı azalır.',
+            transitRailExplanation: '7,5 km içindeki tren istasyonları mesafe ve tarifeli tren sıklığı birlikte değerlendirilerek karşılaştırılır. Bu nedenle en yakın istasyon her zaman en yüksek puanı veren istasyon olmayabilir.',
+            transitTotalExplanation: 'Düzenli toplu taşıma en fazla 6, tren erişimi en fazla 4 ve toplam en fazla 10 puan getirir.',
+            transitFlexNote: 'Flex / talebe bağlı ulaşım sayısal puana dahil değildir.',
+            transitDisplayNote: '1 / 2,5 / 5 km gösterim yarıçapını değiştirmek Ulaşım skorunu değiştirmez.',
+            transitLimitations: 'Gecikmeler, iptaller, gerçek zamanlı araç durumu ve gerçek yürüyüş rotası bu puana dahil değildir.',
+            transitLegacyTitle: 'Haritada gösterilen ulaşım noktaları',
+            transitLegacyNote: 'Bu ikincil liste harita ve altyapı bilgisidir; sayısal skorun hesaplama dökümü değildir.',
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -774,7 +874,9 @@
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
             schoolTypes: { school: 'School', kindergarten: 'Kindergarten' },
             healthTypes: { clinic: 'Clinic', doctor: 'Doctor', doctors: 'Doctor', pharmacy: 'Pharmacy', dentist: 'Dentist', hospital: 'Hospital', physiotherapist: 'Physiotherapist', psychotherapist: 'Psychotherapist', laboratory: 'Laboratory', blood_donation: 'Blood donation' },
-            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
+            transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Light rail', RAIL: 'Rail' },
+            transitDisplayTypes: { bus_stop: 'Bus stop', bus_station: 'Bus station', rail_station: 'Rail station', rail_halt: 'Railway halt', tram_stop: 'Tram stop', transit_platform: 'Transit platform', transit_stop: 'Transit stop', transit_point: 'Transit point' },
+            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', transitHow: 'How is this calculated?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
             radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
             proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
@@ -801,6 +903,22 @@
             healthClinicalSummaryNone: 'no clinical care location within 2.5 km',
             healthHospitalSummary: dist => 'hospital: ' + dist,
             healthHospitalSummaryNone: 'no hospital facility within 20 km',
+            transitLocalSummary: dist => 'Regular stop: ' + dist,
+            transitRailSummary: dist => 'rail: ' + dist,
+            transitSummaryNone: 'No qualifying scheduled local transit or rail access found',
+            transitLocalLabel: 'Scheduled local transit', transitRailLabel: 'Rail access', transitTotalLabel: 'Total',
+            transitBestLocalStop: 'Regular stop used for scoring', transitBestRail: 'Best usable rail station',
+            transitDepartures: 'Typical departures (06:00–22:00)', transitWeekday: 'Weekday', transitSaturday: 'Saturday', transitSunday: 'Sunday',
+            transitNoLocal: 'No qualifying scheduled local transit found within 1 km.',
+            transitNoRail: 'No qualifying rail station found within 7.5 km.',
+            transitLocalExplanation: 'The most useful regular scheduled stop within 1 km is evaluated. Its score depends on straight-line distance and scheduled weekday/weekend service frequency. Distance receives full credit through 250 m and contributes less toward 1 km.',
+            transitRailExplanation: 'Rail stations within 7.5 km are compared using both distance and scheduled train frequency. The nearest station may therefore not be the station that scores highest.',
+            transitTotalExplanation: 'Scheduled local transit contributes up to 6 points, rail access up to 4 points, and the total is capped at 10.',
+            transitFlexNote: 'Flex / on-demand transport is not included in the numeric score.',
+            transitDisplayNote: 'Changing the 1 / 2.5 / 5 km display radius does not change the Transit score.',
+            transitLimitations: 'Delays, cancellations, realtime vehicle status and the actual walking route are not included in this score.',
+            transitLegacyTitle: 'Transit points shown on map',
+            transitLegacyNote: 'This secondary list is map and infrastructure information; it is not the numeric score breakdown.',
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -835,7 +953,9 @@
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
             schoolTypes: { school: 'School', kindergarten: 'Kleuterschool' },
             healthTypes: { clinic: 'Kliniek', doctor: 'Arts', doctors: 'Arts', pharmacy: 'Apotheek', dentist: 'Tandarts', hospital: 'Ziekenhuis', physiotherapist: 'Kinesitherapeut', psychotherapist: 'Psychotherapeut', laboratory: 'Laboratorium', blood_donation: 'Bloeddonatie' },
-            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
+            transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Lightrail', RAIL: 'Trein' },
+            transitDisplayTypes: { bus_stop: 'Bushalte', bus_station: 'Busstation', rail_station: 'Railstation', rail_halt: 'Treinhalte', tram_stop: 'Tramhalte', transit_platform: 'OV-perron', transit_stop: 'Vervoershalte', transit_point: 'Vervoerspunt' },
+            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', transitHow: 'Hoe wordt dit berekend?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
             radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
             proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
@@ -862,6 +982,22 @@
             healthClinicalSummaryNone: 'geen klinische zorglocatie binnen 2,5 km',
             healthHospitalSummary: dist => 'ziekenhuis: ' + dist,
             healthHospitalSummaryNone: 'geen ziekenhuisvoorziening binnen 20 km',
+            transitLocalSummary: dist => 'Reguliere halte: ' + dist,
+            transitRailSummary: dist => 'trein: ' + dist,
+            transitSummaryNone: 'Geen geschikt regulier openbaar vervoer of treinbereik gevonden',
+            transitLocalLabel: 'Regulier openbaar vervoer', transitRailLabel: 'Treinbereikbaarheid', transitTotalLabel: 'Totaal',
+            transitBestLocalStop: 'Reguliere halte gebruikt voor de score', transitBestRail: 'Meest bruikbare treinstation',
+            transitDepartures: 'Typische vertrekken (06:00–22:00)', transitWeekday: 'Weekdag', transitSaturday: 'Zaterdag', transitSunday: 'Zondag',
+            transitNoLocal: 'Geen regulier openbaar vervoer voor de score gevonden binnen 1 km.',
+            transitNoRail: 'Geen geschikt treinstation voor de score gevonden binnen 7,5 km.',
+            transitLocalExplanation: 'De meest bruikbare reguliere halte binnen 1 km wordt beoordeeld. De score hangt af van de hemelsbrede afstand en de geplande dienstfrequentie op weekdagen en in het weekend. Afstand krijgt volledige waarde tot 250 m en draagt richting 1 km steeds minder bij.',
+            transitRailExplanation: 'Treinstations binnen 7,5 km worden vergeleken op basis van zowel afstand als geplande treinfrequentie. Het dichtstbijzijnde station levert daarom niet altijd de hoogste score op.',
+            transitTotalExplanation: 'Regulier openbaar vervoer levert maximaal 6 punten, treinbereikbaarheid maximaal 4 punten en het totaal is maximaal 10.',
+            transitFlexNote: 'Flex / vervoer op aanvraag telt niet mee in de numerieke score.',
+            transitDisplayNote: 'Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de vervoersscore niet.',
+            transitLimitations: 'Vertragingen, annuleringen, realtime voertuigstatus en de werkelijke wandelroute zijn niet in deze score opgenomen.',
+            transitLegacyTitle: 'Vervoerspunten op de kaart',
+            transitLegacyNote: 'Deze secundaire lijst bevat kaart- en infrastructuurinformatie; het is niet de berekening van de numerieke score.',
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -948,6 +1084,39 @@
       fmtHealthDistance(m) {
         if (m < 1000) return Math.round(m) + ' m';
         return this.fmtHealthValue(m / 1000) + ' km';
+      }
+      fmtTransitValue(value) {
+        if (!Number.isFinite(value)) return '—';
+        const formatted = value.toFixed(1);
+        return this.state.lang === 'en' ? formatted : formatted.replace('.', ',');
+      }
+      fmtTransitDistance(m) {
+        if (!Number.isFinite(m)) return '';
+        if (m < 1000) return Math.round(m) + ' m';
+        return this.fmtTransitValue(m / 1000) + ' km';
+      }
+      fmtTransitDeparture(value) {
+        return Number.isFinite(value) ? String(Math.round(value)) : '—';
+      }
+      fmtTransitModes(modes, t) {
+        if (!Array.isArray(modes)) return '';
+        return modes.map(mode => {
+          const key = String(mode || '').toUpperCase();
+          return t.transitModes[key] || mode;
+        }).filter(Boolean).join(', ');
+      }
+      transitSummary(breakdown, t) {
+        if (!breakdown) return t.transitSummaryNone;
+        const parts = [];
+        if (Number.isFinite(breakdown.best_local_distance_m)) {
+          parts.push(t.transitLocalSummary(
+            this.fmtTransitDistance(breakdown.best_local_distance_m)));
+        }
+        if (Number.isFinite(breakdown.best_rail_distance_m)) {
+          parts.push(t.transitRailSummary(
+            this.fmtTransitDistance(breakdown.best_rail_distance_m)));
+        }
+        return parts.length ? parts.join(' · ') : t.transitSummaryNone;
       }
       scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
 
@@ -1195,19 +1364,27 @@
         const d = S.data;
         const cats = (d ? d.categories : []).map(cat => {
           const col = COL[cat.key], sc = this.scoreColor(cat.score), hid = !!S.hidden[cat.key], open = S.open === cat.key;
+          const transitBreakdown = cat.key === 'transit' && cat.score_breakdown ? cat.score_breakdown : null;
+          const hasLocalTransit = !!(transitBreakdown && transitBreakdown.best_local_logical_stop_id);
+          const hasRailTransit = !!(transitBreakdown && transitBreakdown.best_rail_logical_station_id);
+          const localModes = transitBreakdown ? this.fmtTransitModes(transitBreakdown.best_local_modes, t) : '';
+          const localOperators = transitBreakdown && Array.isArray(transitBreakdown.best_local_operators)
+            ? transitBreakdown.best_local_operators.filter(Boolean).join(', ') : '';
           return {
             key: cat.key, label: t.cats[cat.key], count: cat.count, isOpen: open,
-            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isNonHealth: cat.key !== 'health',
-            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' && S.healthInfoOpen)),
+            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isTransit: cat.key === 'transit',
+            isGenericSummary: cat.key !== 'health' && cat.key !== 'transit',
+            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' ? S.healthInfoOpen : (cat.key === 'transit' && S.transitInfoOpen))),
             icon: this.ic(cat.key, col, 19),
             iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
-            scoreStr: this.fmtScore(cat.score),
+            scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : this.fmtScore(cat.score),
             scoreStyle: { font: '800 17px Manrope', color: sc },
             barStyle: { height: '100%', width: (cat.score * 10) + '%', borderRadius: '3px', background: sc, transition: 'width .5s ease' },
             countStr: cat.count + ' ' + t.points,
             nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m) + ' ' + t.straightSuffix,
+            transitSummaryStr: cat.key === 'transit' ? this.transitSummary(transitBreakdown, t) : '',
             marketNote: cat.key === 'market' ? t.marketNote : null,
-            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health') && !!cat.score_breakdown,
+            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health' || cat.key === 'transit') && !!cat.score_breakdown,
             proximityStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown ? (cat.key === 'school'
               ? this.fmtSchoolBreakdownScore(cat.score_breakdown.proximity_points)
               : this.fmtScore(cat.score_breakdown.proximity_points)) : '',
@@ -1245,11 +1422,29 @@
                   ? t.healthHospitalSummary(this.fmtHealthDistance(cat.score_breakdown.nearest_hospital_m))
                   : t.healthHospitalSummaryNone)
               : '',
+            hasLocalTransit, noLocalTransit: cat.key === 'transit' && !hasLocalTransit,
+            hasRailTransit, noRailTransit: cat.key === 'transit' && !hasRailTransit,
+            transitLocalPointsStr: transitBreakdown ? this.fmtTransitValue(transitBreakdown.local_access_points) : '—',
+            transitRailPointsStr: transitBreakdown ? this.fmtTransitValue(transitBreakdown.rail_access_points) : '—',
+            transitTotalStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : '',
+            transitLocalName: hasLocalTransit ? transitBreakdown.best_local_name : '',
+            transitRailName: hasRailTransit ? transitBreakdown.best_rail_name : '',
+            transitLocalDistanceStr: hasLocalTransit ? this.fmtTransitDistance(transitBreakdown.best_local_distance_m) : '',
+            transitRailDistanceStr: hasRailTransit ? this.fmtTransitDistance(transitBreakdown.best_rail_distance_m) : '',
+            transitLocalMetaStr: [localModes, localOperators].filter(Boolean).join(' · '),
+            transitLocalWeekday: hasLocalTransit ? this.fmtTransitDeparture(transitBreakdown.best_local_weekday_departures) : '—',
+            transitLocalSaturday: hasLocalTransit ? this.fmtTransitDeparture(transitBreakdown.best_local_saturday_departures) : '—',
+            transitLocalSunday: hasLocalTransit ? this.fmtTransitDeparture(transitBreakdown.best_local_sunday_departures) : '—',
+            transitRailWeekday: hasRailTransit ? this.fmtTransitDeparture(transitBreakdown.best_rail_weekday_departures) : '—',
+            transitRailSaturday: hasRailTransit ? this.fmtTransitDeparture(transitBreakdown.best_rail_saturday_departures) : '—',
+            transitRailSunday: hasRailTransit ? this.fmtTransitDeparture(transitBreakdown.best_rail_sunday_departures) : '—',
             toggleInfo: () => cat.key === 'school'
               ? this.setState({ schoolInfoOpen: !this.state.schoolInfoOpen })
               : (cat.key === 'health'
                   ? this.setState({ healthInfoOpen: !this.state.healthInfoOpen })
-                  : this.setState({ marketInfoOpen: !this.state.marketInfoOpen })),
+                  : (cat.key === 'transit'
+                      ? this.setState({ transitInfoOpen: !this.state.transitInfoOpen })
+                      : this.setState({ marketInfoOpen: !this.state.marketInfoOpen }))),
             limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
             chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
             toggle: () => this.setState({ open: open ? null : cat.key }),
@@ -1269,8 +1464,12 @@
                 name: it.name,
                 typeStr: cat.key === 'school'
                   ? (t.schoolTypes[it.type] || it.type || '')
-                  : (cat.key === 'health' ? (t.healthTypes[it.type] || it.type || '') : (it.type || '')),
-                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health') ? 'none' : 'capitalize' },
+                  : (cat.key === 'health'
+                      ? (t.healthTypes[it.type] || it.type || '')
+                      : (cat.key === 'transit'
+                          ? (t.transitDisplayTypes[it.display_type] || t.transitDisplayTypes.transit_point)
+                          : (it.type || ''))),
+                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit') ? 'none' : 'capitalize' },
                 straightStr: t.straightLine + ' ' + this.fmtDist(straight),
                 walkStr: t.estimatedWalk + ' ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
                 driveStr: t.estimatedDrive + ' ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU,

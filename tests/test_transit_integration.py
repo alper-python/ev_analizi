@@ -220,6 +220,9 @@ class TransitParquetIntegrationTests(unittest.TestCase):
             self.assertEqual([item[field] for item in components],
                              [components[0][field]] * 3)
         self.assertEqual([result[2] for result in results], [1, 2, 3])
+        self.assertTrue({"railway", "highway", "public_transport"}.issubset(
+            results[0][0].columns))
+        self.assertEqual(results[0][0].iloc[0]["highway"], "bus_stop")
 
     def test_public_analyze_uses_dedicated_path_and_exposes_breakdown(self):
         with mock.patch.object(
