@@ -15,9 +15,11 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import requests
+from shapely.geometry import Point
 
 from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
-                        analyze_health, analyze_market, analyze_school, geocode,
+                        analyze_health, analyze_market, analyze_park,
+                        analyze_school, geocode,
                         query_category, query_market_candidates,
                         query_school_candidates)
 from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
@@ -180,6 +182,7 @@ def _create_demo_caches():
     temp_dir = tempfile.TemporaryDirectory(prefix="ev-analizi-preview-")
     target = Path(temp_dir.name)
     nodes_path, polys_path = target / "nodes.parquet", target / "polys.parquet"
+    parks_path = target / "be_park_destinations.parquet"
     nodes = [
         _node(1, "market", "Delhaize Demo", 300, 20, shop="supermarket"),
         _node(2, "market", "Carrefour Express Demo", 100, 120, shop="convenience"),
@@ -205,15 +208,37 @@ def _create_demo_caches():
     ]
     pq.write_table(pa.Table.from_pylist(nodes, schema=NODE_SCHEMA), nodes_path)
     pq.write_table(pa.Table.from_pylist(polygons, schema=POLY_SCHEMA), polys_path)
+    park_lat, park_lon = _offset(600, 10)
+    park_geometry = Point(park_lon, park_lat).buffer(0.0002)
+    min_lon, min_lat, max_lon, max_lat = park_geometry.bounds
+    pq.write_table(pa.Table.from_pylist([{
+        "park_id": "park:demo:1", "osm_type": "way", "osm_id": 1,
+        "name": "Demo Neighbourhood Park",
+        "display_name": "Demo Neighbourhood Park",
+        "display_name_source": "canonical", "park_class": "park",
+        "eligibility_tier": "primary", "counts_as_primary": True,
+        "counts_as_choice": True, "counts_as_secondary": False,
+        "parent_park_id": None, "strong_identity_type": "osm",
+        "strong_identity_value": "way:1", "access": "yes",
+        "area_m2": 15000.0, "size_factor": 0.9,
+        "final_confidence": 1.0, "secondary_class": None,
+        "secondary_type_weight": None, "secondary_confidence": None,
+        "geometry_wkb": park_geometry.wkb,
+        "representative_lat": park_lat, "representative_lon": park_lon,
+        "bbox_min_lat": min_lat, "bbox_min_lon": min_lon,
+        "bbox_max_lat": max_lat, "bbox_max_lon": max_lon,
+    }]), parks_path)
     return temp_dir, str(nodes_path), str(polys_path)
 
 
 NODES_PATH = _existing_cache("POI_NODES", "be_poi.parquet")
 POLYS_PATH = _existing_cache("POI_POLYS", "be_poi_poly.parquet")
+PARK_PATH = _existing_cache("PARK_DESTINATIONS", "be_park_destinations.parquet")
 DATA_MODE = "real" if (NODES_PATH or POLYS_PATH) else "demo"
 _demo_dir = None
 if DATA_MODE == "demo":
     _demo_dir, NODES_PATH, POLYS_PATH = _create_demo_caches()
+    PARK_PATH = str(Path(NODES_PATH).with_name("be_park_destinations.parquet"))
     atexit.register(_demo_dir.cleanup)
 
 
@@ -287,7 +312,7 @@ def _school_score_breakdown(con, lat, lon):
 
 
 def _category_payload(con, category, lat, lon, radius, topn, score,
-                      transit_breakdown=None):
+                      dedicated_breakdown=None):
     if category == "market":
         frame, _market_score, count, nearest = analyze_market(
             con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
@@ -306,19 +331,27 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
             "nearest_clinical_m": components["nearest_clinical_m"],
             "nearest_hospital_m": components["nearest_hospital_m"],
         }
+    elif category == "park":
+        frame, _park_score, count, nearest, _components = analyze_park(
+            con, PARK_PATH, lat, lon, radius, topn)
+        score_breakdown = dedicated_breakdown
     else:
         frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0
         nearest = float(frame.iloc[0]["d_min"]) if not frame.empty else None
-        score_breakdown = transit_breakdown if category == "transit" else None
+        score_breakdown = dedicated_breakdown if category == "transit" else None
     items = []
     for _, row in frame.iterrows():
         poi_type = next((_value(row.get(column)) for column in
                          ("shop", "amenity", "healthcare", "railway", "highway",
                           "public_transport", "leisure", "sport")
                          if _value(row.get(column))), None)
+        if category == "park":
+            poi_type = _value(row.get("park_class"))
+        item_name = (_value(row.get("display_name")) if category == "park"
+                     else None)
         item = {
-            "name": _value(row["name"]) or _value(row["brand"]) or "Unnamed",
+            "name": item_name or _value(row["name"]) or _value(row["brand"]) or "Unnamed",
             "brand": _value(row["brand"]),
             "type": poi_type,
             "lat": float(row["lat"]), "lon": float(row["lon"]),
@@ -328,6 +361,17 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
         }
         if category == "transit":
             item["display_type"] = _transit_display_type(row)
+        elif category == "park":
+            item.update({
+                "park_id": _value(row.get("park_id")),
+                "display_name": _value(row.get("display_name")),
+                "park_class": _value(row.get("park_class")),
+                "eligibility_tier": _value(row.get("eligibility_tier")),
+                "area_m2": (_value(row.get("area_m2"))),
+                "parent_park_id": _value(row.get("parent_park_id")),
+                "counts_as_primary": bool(row.get("counts_as_primary")),
+                "counts_as_secondary": bool(row.get("counts_as_secondary")),
+            })
         items.append(item)
     return {"key": category, "score": score, "count": count,
             "nearest_m": int(round(nearest)) if nearest is not None else None,
@@ -344,13 +388,14 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
         return cached
 
     result = analyze_location(lat=lat, lon=lon, radius=radius, topn=topn,
-                              nodes_path=NODES_PATH, polys_path=POLYS_PATH)
+                              nodes_path=NODES_PATH, polys_path=POLYS_PATH,
+                              park_cache_path=PARK_PATH)
     with duckdb.connect() as con:
         categories = [
             _category_payload(con, category, lat, lon, radius, topn,
                               result["scores"][CATS[category]["label"]],
-                              result.get("breakdowns", {}).get("transit")
-                              if category == "transit" else None)
+                              result.get("breakdowns", {}).get(category)
+                              if category in {"transit", "park"} else None)
             for category in CATS
         ]
     payload = {"display_address": display_address, "lat": lat, "lon": lon,
@@ -365,7 +410,8 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
 @app.get("/api/health")
 def health():
     return jsonify({"status": "ok", "data_mode": DATA_MODE,
-                    "cache": {"nodes": NODES_PATH, "polys": POLYS_PATH}})
+                    "cache": {"nodes": NODES_PATH, "polys": POLYS_PATH,
+                              "parks": PARK_PATH}})
 
 
 @app.get("/api/address-suggestions")
@@ -434,4 +480,5 @@ if __name__ == "__main__":
     print(f"[preview] data mode: {DATA_MODE}")
     print(f"[preview] nodes: {NODES_PATH}")
     print(f"[preview] polygons: {POLYS_PATH}")
+    print(f"[preview] parks: {PARK_PATH}")
     app.run(host="127.0.0.1", port=5000, debug=False)

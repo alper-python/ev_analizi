@@ -13,6 +13,7 @@ SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
 sys.path.insert(0, str(SOURCE_DIR))
 try:
     import app_duckdb as app
+    import build_park_cache as park_cache
     import market_scoring as market
 finally:
     sys.path.pop(0)
@@ -75,6 +76,7 @@ class MarketDuckDBIntegrationTests(unittest.TestCase):
         temp_path = Path(cls.temp_dir.name)
         cls.nodes_path = temp_path / "nodes.parquet"
         cls.polygons_path = temp_path / "polygons.parquet"
+        cls.parks_path = temp_path / "be_park_destinations.parquet"
 
         nodes = [
             node_row(1, "Solo Super", 300, shop="supermarket"),
@@ -95,6 +97,8 @@ class MarketDuckDBIntegrationTests(unittest.TestCase):
         ]
         pq.write_table(pa.Table.from_pylist(nodes, schema=NODE_SCHEMA), cls.nodes_path)
         pq.write_table(pa.Table.from_pylist(polygons, schema=POLYGON_SCHEMA), cls.polygons_path)
+        pq.write_table(pa.Table.from_pylist([], schema=park_cache.park_schema()),
+                       cls.parks_path)
 
     @classmethod
     def tearDownClass(cls):

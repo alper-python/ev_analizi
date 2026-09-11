@@ -14,6 +14,7 @@ SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
 sys.path.insert(0, str(SOURCE_DIR))
 try:
     import app_duckdb as app
+    import build_park_cache as park_cache
     import health_scoring as health
     import server as preview_server
 finally:
@@ -73,6 +74,7 @@ class HealthDuckDBIntegrationTests(unittest.TestCase):
         target = Path(self.temp.name)
         self.nodes_path = target / "nodes.parquet"
         self.polygons_path = target / "polygons.parquet"
+        self.parks_path = target / "be_park_destinations.parquet"
         nodes = [
             row(1, "Central Care", 300, amenity="doctors"),
             row(2, "Local Pharmacy", 500, amenity="pharmacy"),
@@ -90,6 +92,8 @@ class HealthDuckDBIntegrationTests(unittest.TestCase):
         pq.write_table(pa.Table.from_pylist(nodes, schema=NODE_SCHEMA), self.nodes_path)
         pq.write_table(pa.Table.from_pylist(polygons, schema=POLYGON_SCHEMA),
                        self.polygons_path)
+        pq.write_table(pa.Table.from_pylist([], schema=park_cache.park_schema()),
+                       self.parks_path)
 
     def tearDown(self):
         self.temp.cleanup()

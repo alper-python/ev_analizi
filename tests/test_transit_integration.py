@@ -14,6 +14,7 @@ SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
 sys.path.insert(0, str(SOURCE_DIR))
 try:
     import app_duckdb as app
+    import build_park_cache as park_cache
 finally:
     sys.path.pop(0)
 
@@ -104,6 +105,7 @@ class TransitParquetIntegrationTests(unittest.TestCase):
         cls.stops = root / "be_transit_service_stops.parquet"
         cls.summary = root / "be_transit_service_summary.parquet"
         cls.rail = root / "be_rail_service.parquet"
+        cls.parks = root / "be_park_destinations.parquet"
         pq.write_table(pa.Table.from_pylist([
             poi("Display 500", 500), poi("Display 1500", 1500),
             poi("Display 3000", 3000)], schema=POI_SCHEMA), cls.nodes)
@@ -128,6 +130,8 @@ class TransitParquetIntegrationTests(unittest.TestCase):
             station("uic:tie-z", 3000, 100, "Tie Z"),
             station("uic:tie-a", 3000, 100, "Tie A"),
         ], schema=RAIL_SCHEMA), cls.rail)
+        pq.write_table(pa.Table.from_pylist([], schema=park_cache.park_schema()),
+                       cls.parks)
 
     @classmethod
     def tearDownClass(cls):

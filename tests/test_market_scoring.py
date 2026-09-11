@@ -248,7 +248,6 @@ class MarketDeduplicationTests(unittest.TestCase):
 class NonMarketRegressionTests(unittest.TestCase):
     def test_remaining_generic_configuration_and_formula_are_unchanged(self):
         expected = {
-            "park": {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
             "sport": {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
         }
         self.assertNotIn("market", app.SCORING)
@@ -269,6 +268,8 @@ class NonMarketRegressionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Transit Score V1"):
             app.calc_category_score("transit", 2, 300)
+        with self.assertRaisesRegex(ValueError, "Park Score V1"):
+            app.calc_category_score("park", 2, 300)
 
     def test_generic_market_calls_fail_explicitly(self):
         message = "dedicated"

@@ -8,6 +8,8 @@ from health_scoring import (HEALTH_HOSPITAL_RADIUS_M, HEALTH_LOCAL_RADIUS_M,
                             health_score_components)
 from market_scoring import (MARKET_SCORING_RADIUS_M, calc_market_score,
                             deduplicate_market_pois, market_type)
+from park_scoring import (PARK_SCORING_RADIUS_M, geometry_distance_m,
+                          park_score_components)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, calc_school_score,
                             deduplicate_school_pois)
 from transit_scoring import (LOCAL_SCORING_RADIUS_M, RADIUS_EPSILON_M,
@@ -446,6 +448,89 @@ def _duckdb_path(path):
     return str(os.path.abspath(os.fspath(path))).replace("'", "''")
 
 
+def resolve_park_cache_path(nodes_path, polys_path, park_path=None):
+    """Resolve the dedicated Park cache and fail instead of using legacy POIs."""
+    candidate = park_path
+    if candidate is None:
+        source_path = nodes_path or polys_path
+        if source_path:
+            candidate = os.path.join(
+                os.path.dirname(os.path.abspath(source_path)),
+                "be_park_destinations.parquet")
+    if not candidate or not os.path.isfile(candidate):
+        raise FileNotFoundError(
+            "Dedicated Park cache not found: be_park_destinations.parquet")
+    return os.path.abspath(candidate)
+
+
+def query_park_candidates(con, park_path, lat, lon, radius_m):
+    """BBox-prune the Park cache, then apply exact footprint distance."""
+    if not park_path or not os.path.isfile(park_path):
+        raise FileNotFoundError(
+            "Dedicated Park cache not found: be_park_destinations.parquet")
+    lat_min, lat_max, lon_min, lon_max = transit_bounding_box(
+        lat, lon, radius_m)
+    query = f"""
+    SELECT park_id, osm_type, osm_id, name, display_name,
+           display_name_source, park_class, eligibility_tier,
+           counts_as_primary, counts_as_choice, counts_as_secondary,
+           parent_park_id, strong_identity_type, strong_identity_value,
+           access, area_m2, size_factor, final_confidence,
+           secondary_class, secondary_type_weight, secondary_confidence,
+           geometry_wkb, representative_lat, representative_lon
+    FROM read_parquet('{_duckdb_path(park_path)}')
+    WHERE bbox_max_lat >= {lat_min} AND bbox_min_lat <= {lat_max}
+      AND bbox_max_lon >= {lon_min} AND bbox_min_lon <= {lon_max}
+    """
+    candidates = con.execute(query).df().to_dict("records")
+    output = []
+    for candidate in candidates:
+        distance = geometry_distance_m(lat, lon, candidate["geometry_wkb"])
+        if distance <= float(radius_m):
+            candidate["distance_m"] = distance
+            candidate.pop("geometry_wkb", None)
+            output.append(candidate)
+    return output
+
+
+def analyze_park(con, park_path, lat, lon, display_radius_m, topn):
+    """Compute fixed-radius Park V1 and authoritative display destinations."""
+    query_radius = max(float(display_radius_m), PARK_SCORING_RADIUS_M)
+    candidates = query_park_candidates(
+        con, park_path, lat, lon, query_radius)
+    scoring_rows = [row for row in candidates
+                    if row["distance_m"] <= PARK_SCORING_RADIUS_M]
+    components = park_score_components(scoring_rows)
+
+    display_rows = [row for row in candidates
+                    if row["distance_m"] <= float(display_radius_m)]
+    display_rows.sort(key=lambda row: (
+        float(row["distance_m"]), str(row.get("park_id") or "")))
+    n_total = len(display_rows)
+    d_min = min((row["distance_m"] for row in display_rows), default=None)
+    output = []
+    for candidate in display_rows[:max(0, int(topn))]:
+        distance = float(candidate["distance_m"])
+        row = dict(candidate)
+        row.update({
+            "brand": None, "amenity": None, "shop": None,
+            "healthcare": None, "leisure": None, "sport": None,
+            "lat": float(row["representative_lat"]),
+            "lon": float(row["representative_lon"]),
+            "score": 0.0, "d_lin": distance, "d_min": d_min,
+            "n_total": n_total, "has_hospital_any": 0,
+            "walk_m": distance * WALK_CIRCUITY,
+            "drive_m": distance * DRIVE_CIRCUITY,
+            "walk_s": ((distance * WALK_CIRCUITY)
+                       / (WALK_SPEED_KPH * 1000 / 3600)),
+            "drive_s": ((distance * DRIVE_CIRCUITY)
+                        / (DRIVE_SPEED_KPH * 1000 / 3600)),
+        })
+        output.append(row)
+    return (pd.DataFrame(output), components["score_precise"], n_total,
+            d_min, components)
+
+
 def query_transit_local_candidates(con, stops_path, summary_path, lat, lon):
     """Join fixed-radius service metadata to each logical stop's nearest member."""
     lat_min, lat_max, lon_min, lon_max = transit_bounding_box(
@@ -560,6 +645,8 @@ def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
         raise ValueError("School uses the dedicated analyze_school() School Score V1 path.")
     if cat == "health":
         raise ValueError("Health uses the dedicated analyze_health() Health Score V1 path.")
+    if cat == "park":
+        raise ValueError("Park uses the dedicated analyze_park() Park Score V1 path.")
     dlat, dlon = meters_to_deg_latlon(lat, radius_m)
     lat_min, lat_max = lat - dlat, lat + dlat
     lon_min, lon_max = lon - dlon, lon + dlon
@@ -638,6 +725,8 @@ def calc_category_score(cat, n_total:int, d_min:float, has_hospital:bool=False) 
         raise ValueError("Health uses health_score_components() in the dedicated Health Score V1 path.")
     if cat == "transit":
         raise ValueError("Transit uses transit_score_components() in the dedicated Transit Score V1 path.")
+    if cat == "park":
+        raise ValueError("Park uses park_score_components() in the dedicated Park Score V1 path.")
     # Kategoriye göre konfig
     cfg = SCORING[cat]
     D0 = cfg["D0"]
@@ -670,6 +759,8 @@ def main():
     ap.add_argument("--topn", type=int, default=TOP_N)
     ap.add_argument("--nodes", type=str, default="./cache/be_poi.parquet")
     ap.add_argument("--polys", type=str, default="./cache/be_poi_poly.parquet")
+    ap.add_argument("--parks", type=str,
+                    default="./cache/be_park_destinations.parquet")
     args = ap.parse_args()
 
     # konum
@@ -699,6 +790,7 @@ def main():
     cat_scores={}
     summary_rows=[]  # kategori scorecard için
     transit_paths = resolve_transit_cache_paths(nodes_path, polys_path)
+    park_path = resolve_park_cache_path(nodes_path, polys_path, args.parks)
 
     for cat in CATS.keys():
         dedicated_score = None
@@ -715,6 +807,9 @@ def main():
             df, dedicated_score, _, _, _ = analyze_transit(
                 con, nodes_path, polys_path, *transit_paths,
                 lat, lon, args.radius, args.topn)
+        elif cat == "park":
+            df, dedicated_score, _, _, _ = analyze_park(
+                con, park_path, lat, lon, args.radius, args.topn)
         else:
             df = query_category(con, nodes_path, polys_path, cat, lat, lon, args.radius, args.topn)
         label = CATS[cat]["label"]
@@ -823,7 +918,7 @@ def main():
 def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_N,
             nodes_path="./cache/be_poi.parquet", polys_path="./cache/be_poi_poly.parquet",
             transit_stops_path=None, transit_summary_path=None,
-            rail_service_path=None):
+            rail_service_path=None, park_cache_path=None):
     # konum
     if address:
         lat, lon, disp = geocode(address)
@@ -845,6 +940,9 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
     transit_paths = resolve_transit_cache_paths(
         nodes_path if nodes_ok else None, polys_path if polys_ok else None,
         transit_stops_path, transit_summary_path, rail_service_path)
+    park_path = resolve_park_cache_path(
+        nodes_path if nodes_ok else None, polys_path if polys_ok else None,
+        park_cache_path)
 
     for cat in CATS.keys():
         dedicated_score = None
@@ -869,6 +967,10 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 con, nodes_path if nodes_ok else None,
                 polys_path if polys_ok else None, *transit_paths,
                 lat, lon, radius, topn)
+            breakdowns[cat] = dedicated_components
+        elif cat == "park":
+            df, dedicated_score, _, _, dedicated_components = analyze_park(
+                con, park_path, lat, lon, radius, topn)
             breakdowns[cat] = dedicated_components
         else:
             df = query_category(con, nodes_path if nodes_ok else None,
@@ -905,11 +1007,17 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
     if not big.empty:
         for _, r in big.iterrows():
             label = CATS[r["cat"]]["label"]
-            popup = (f"{label}: {r['name']}<br>"
+            if r["cat"] == "park":
+                row_name = next((value for value in (
+                    r.get("display_name"), r.get("name"), r.get("park_id"))
+                    if pd.notnull(value) and str(value).strip()), "Unnamed")
+            else:
+                row_name = r["name"]
+            popup = (f"{label}: {row_name}<br>"
                      f"Yürüme: {fmt_meters(r['walk_m'])}, {fmt_seconds(r['walk_s'])}<br>"
                      f"Araba: {fmt_meters(r['drive_m'])}, {fmt_seconds(r['drive_s'])}")
             folium.Marker([float(r["lat"]), float(r["lon"])],
-                          popup=popup, tooltip=f"{label}: {r['name']}",
+                          popup=popup, tooltip=f"{label}: {row_name}",
                           icon=folium.Icon(color=CATS[r["cat"]]["color"])).add_to(m)
 
     # Legend + Scorecard (harita üstü overlay)
@@ -946,8 +1054,14 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 continue
             rows = []
             for _, r in sub.iterrows():
+                if cat == "park":
+                    row_name = next((value for value in (
+                        r.get("display_name"), r.get("name"), r.get("park_id"))
+                        if pd.notnull(value) and str(value).strip()), "Unnamed")
+                else:
+                    row_name = r["name"]
                 item = {
-                    "name": r["name"],
+                    "name": row_name,
                     "walk_m": fmt_meters(r["walk_m"]),
                     "walk_s": fmt_seconds(r["walk_s"]),
                     "drive_m": fmt_meters(r["drive_m"]),
@@ -955,6 +1069,23 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 }
                 if cat == "school":
                     item["type"] = r["amenity"]
+                elif cat == "park":
+                    item.update({
+                        "park_id": r["park_id"],
+                        "display_name": (r.get("display_name")
+                                         if pd.notnull(r.get("display_name"))
+                                         else None),
+                        "park_class": r["park_class"],
+                        "eligibility_tier": r["eligibility_tier"],
+                        "distance_m": float(r["d_lin"]),
+                        "area_m2": (float(r["area_m2"])
+                                    if pd.notnull(r["area_m2"]) else None),
+                        "parent_park_id": (r.get("parent_park_id")
+                                           if pd.notnull(r.get("parent_park_id"))
+                                           else None),
+                        "counts_as_primary": bool(r["counts_as_primary"]),
+                        "counts_as_secondary": bool(r["counts_as_secondary"]),
+                    })
                 rows.append(item)
             results_by_cat[cat] = rows
     else:

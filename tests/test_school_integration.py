@@ -13,6 +13,7 @@ SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
 sys.path.insert(0, str(SOURCE_DIR))
 try:
     import app_duckdb as app
+    import build_park_cache as park_cache
     import school_scoring as school
 finally:
     sys.path.pop(0)
@@ -79,6 +80,7 @@ class SchoolDuckDBIntegrationTests(unittest.TestCase):
         temp_path = Path(cls.temp_dir.name)
         cls.nodes_path = temp_path / "nodes.parquet"
         cls.polygons_path = temp_path / "polygons.parquet"
+        cls.parks_path = temp_path / "be_park_destinations.parquet"
         nodes = [
             school_row(1, "Nearest School", 300, "school"),
             school_row(2, "Duplicate School", 500, "school"),
@@ -96,6 +98,8 @@ class SchoolDuckDBIntegrationTests(unittest.TestCase):
         pq.write_table(pa.Table.from_pylist(nodes, schema=NODE_SCHEMA), cls.nodes_path)
         pq.write_table(pa.Table.from_pylist(polygons, schema=POLYGON_SCHEMA),
                        cls.polygons_path)
+        pq.write_table(pa.Table.from_pylist([], schema=park_cache.park_schema()),
+                       cls.parks_path)
 
     @classmethod
     def tearDownClass(cls):
@@ -190,6 +194,9 @@ class SchoolDuckDBIntegrationTests(unittest.TestCase):
             nodes_path = Path(temp_dir) / "kindergarten-nodes.parquet"
             rows = [school_row(1, "Only Kindergarten", 300, "kindergarten")]
             pq.write_table(pa.Table.from_pylist(rows, schema=NODE_SCHEMA), nodes_path)
+            pq.write_table(
+                pa.Table.from_pylist([], schema=park_cache.park_schema()),
+                Path(temp_dir) / "be_park_destinations.parquet")
             result = app.analyze(
                 lat=TEST_LAT, lon=TEST_LON, radius=2500, topn=20,
                 nodes_path=str(nodes_path), polys_path=None)

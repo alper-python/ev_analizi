@@ -9,6 +9,7 @@ import pandas as pd
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
 sys.path.insert(0, str(SOURCE_DIR))
 try:
+    import app_duckdb as app
     import server
 finally:
     sys.path.pop(0)
@@ -177,6 +178,10 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         cls.patches = [
             patch.object(server, "NODES_PATH", cls.demo_nodes),
             patch.object(server, "POLYS_PATH", cls.demo_polys),
+            patch.object(
+                server, "PARK_PATH",
+                str(Path(cls.demo_nodes).with_name(
+                    "be_park_destinations.parquet"))),
             patch.object(server, "DATA_MODE", "demo"),
         ]
         for active_patch in cls.patches:
@@ -286,6 +291,99 @@ class RadiusReanalysisApiTests(unittest.TestCase):
             breakdowns[0]["clinical_proximity_points"]
             + breakdowns[0]["choice_points"] + breakdowns[0]["hospital_points"],
             health_categories[0]["score"], places=1)
+
+    def test_park_uses_dedicated_cache_and_exposes_authoritative_breakdown(self):
+        parks = [next(category for category in self.analyze(radius)["categories"]
+                      if category["key"] == "park")
+                 for radius in (1000, 2500, 5000)]
+        self.assertEqual([category["score"] for category in parks],
+                         [parks[0]["score"]] * 3)
+        breakdowns = [category["score_breakdown"] for category in parks]
+        for field in ("score_precise", "score_public", "primary_points",
+                      "choice_points", "secondary_points", "winner"):
+            self.assertEqual([breakdown[field] for breakdown in breakdowns],
+                             [breakdowns[0][field]] * 3)
+        self.assertEqual(breakdowns[0]["scoring_radius_m"], 2500)
+        self.assertEqual(parks[0]["score"], breakdowns[0]["score_public"])
+        self.assertEqual(parks[0]["items"][0]["park_class"], "park")
+        self.assertNotIn("geometry_wkb", parks[0]["items"][0])
+
+    def test_overall_uses_public_park_score_with_existing_weights(self):
+        payload = self.analyze(2500)
+        category_scores = {category["key"]: category["score"]
+                           for category in payload["categories"]}
+        expected = sum(category_scores[key] * app.OVERALL_WEIGHTS[key]
+                       for key in server.CATS)
+        self.assertEqual(payload["overall"], round(expected, 1))
+
+
+class RealBelgiumParkPreviewApiTests(unittest.TestCase):
+    cache_dir = SOURCE_DIR / "cache"
+    park_path = cache_dir / "be_park_destinations.parquet"
+    locations = {
+        "Gijmelstraat": (51.0034977, 4.8405107, 5.697331540),
+        "Grote Markt Aarschot": (50.9843, 4.8367, 8.533889681),
+        "Leuven center": (50.8795, 4.7023, 8.648155664),
+        "Scherpenheuvel": (50.9949, 4.9778, 4.209516994),
+        "Diepenstraat Langdorp": (51.0129, 4.8930, 1.033141391),
+    }
+
+    @unittest.skipUnless(park_path.is_file(), "real Park cache unavailable")
+    def test_five_locations_use_dedicated_scorer_through_preview_api(self):
+        original_payload = server._category_payload
+
+        def analysis(*, lat, lon, radius, topn, **_kwargs):
+            with server.duckdb.connect() as con:
+                _frame, _score, _count, _nearest, breakdown = server.analyze_park(
+                    con, str(self.park_path), lat, lon, radius, topn)
+            scores = {config["label"]: 0.0 for config in server.CATS.values()}
+            scores[server.CATS["park"]["label"]] = breakdown["score_public"]
+            return {"overall": 0.0, "scores": scores,
+                    "breakdowns": {"park": breakdown}, "map_html": ""}
+
+        def category_payload(con, category, lat, lon, radius, topn, score,
+                             breakdown=None):
+            if category == "park":
+                return original_payload(
+                    con, category, lat, lon, radius, topn, score, breakdown)
+            return {"key": category, "score": score, "count": 0,
+                    "nearest_m": None, "items": [], "score_breakdown": None}
+
+        client = server.app.test_client()
+        with (patch.object(server, "PARK_PATH", str(self.park_path)),
+              patch.object(server, "analyze_location", side_effect=analysis),
+              patch.object(server, "_category_payload",
+                           side_effect=category_payload)):
+            for name, (lat, lon, expected) in self.locations.items():
+                scores = []
+                breakdowns = []
+                for radius in (1000, 2500, 5000):
+                    server._result_cache.clear()
+                    response = client.post("/api/analyze", json={
+                        "address": name, "lat": lat, "lon": lon,
+                        "radius": radius, "topn": 20, "lang": "en",
+                    })
+                    self.assertEqual(response.status_code, 200)
+                    park = next(category for category in response.get_json()["categories"]
+                                if category["key"] == "park")
+                    scores.append(park["score"])
+                    breakdown = park["score_breakdown"]
+                    breakdowns.append(breakdown)
+                    self.assertAlmostEqual(
+                        breakdown["primary_points"] + breakdown["choice_points"]
+                        + breakdown["secondary_points"],
+                        breakdown["score_precise"])
+                    legacy = (6.0 * max(0.0, 1.0 -
+                                        (park["nearest_m"] or 1200) / 1200.0)
+                              + 4.0 * min(park["count"], 3) / 3.0)
+                    self.assertNotEqual(park["score"], round(min(10.0, legacy), 1))
+                    self.assertTrue(all("geometry_wkb" not in item
+                                        for item in park["items"]))
+                with self.subTest(location=name):
+                    self.assertEqual(scores, [round(expected, 1)] * 3)
+                    self.assertEqual(breakdowns, [breakdowns[0]] * 3)
+                    self.assertAlmostEqual(
+                        breakdowns[0]["score_precise"], expected, places=8)
 
 
 class TransitPreviewContractTests(unittest.TestCase):
