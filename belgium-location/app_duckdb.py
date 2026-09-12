@@ -597,8 +597,11 @@ def analyze_sport(con, sport_path, lat, lon, display_radius_m, topn):
         con, sport_path, lat, lon, query_radius)
     components = sport_score_components(candidates)
 
-    display_rows = [row for row in candidates
-                    if row["distance_m"] <= float(display_radius_m)]
+    display_rows = [
+        row for row in candidates
+        if row["distance_m"] <= float(display_radius_m)
+        and bool(row.get("score_eligible"))
+    ]
     display_rows.sort(key=lambda row: (
         float(row["distance_m"]), str(row.get("sport_id") or "")))
     n_total = len(display_rows)

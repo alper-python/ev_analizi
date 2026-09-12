@@ -112,6 +112,11 @@
                 grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 8px
             }
+            .sport-breakdown-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px
+            }
             .transit-departure-grid {
                 display: grid;
                 grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -184,7 +189,7 @@
             }
 
             @media (max-width: 520px) {
-                .park-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
+                .park-breakdown-grid, .sport-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
                 .poi-distances { flex-direction: column; align-items: flex-start; gap: 4px }
                 .transit-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
             }
@@ -494,6 +499,9 @@
                                                     <sc-if value="{{ cat.isPark }}" hint-placeholder-val="{{ false }}">
                                                         <span>{{ cat.parkSummaryStr }}</span>
                                                     </sc-if>
+                                                    <sc-if value="{{ cat.isSport }}" hint-placeholder-val="{{ false }}">
+                                                        <span>{{ cat.sportSummaryStr }}</span>
+                                                    </sc-if>
                                                 </div>
                                             </div>
                                             <div style="{{ cat.chevStyle }}">›</div>
@@ -583,6 +591,17 @@
                                                     <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
                                                         <div>{{ t.parkOverview }}</div>
                                                         <div style="margin-top:6px">{{ t.parkDistanceRadius }}</div>
+                                                    </div>
+                                                </sc-if>
+                                            </div>
+                                        </sc-if>
+                                        <sc-if value="{{ cat.isSport }}" hint-placeholder-val="{{ false }}">
+                                            <div style="padding:0 16px 11px 66px">
+                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.sportHow }}</button>
+                                                <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                        <div>{{ t.sportOverview }}</div>
+                                                        <div style="margin-top:6px">{{ t.sportDistanceRadius }}</div>
                                                     </div>
                                                 </sc-if>
                                             </div>
@@ -677,6 +696,36 @@
                                                         </div>
                                                     </div>
                                                     <div style="padding:11px 16px;border-bottom:1px solid var(--line);background:var(--surface);font:800 12px Manrope;color:var(--muted)">{{ t.parkNearbyTitle }}</div>
+                                                </sc-if>
+                                                <sc-if value="{{ cat.isSport }}" hint-placeholder-val="{{ false }}">
+                                                    <div style="padding:13px 16px;background:var(--bg);border-bottom:1px solid var(--line)">
+                                                        <div class="sport-breakdown-grid">
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.sportBestLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#3A8FA3;white-space:nowrap">{{ cat.sportBestPointsStr }} / {{ cat.sportBestMaxStr }}</strong>
+                                                                </div>
+                                                                <sc-if value="{{ cat.hasSportWinner }}" hint-placeholder-val="{{ true }}">
+                                                                    <div style="margin-top:9px;font:800 13px/1.4 Manrope;color:var(--ink);overflow-wrap:anywhere">{{ cat.sportWinnerName }}</div>
+                                                                    <div style="margin-top:3px;font:600 11px/1.45 Manrope;color:var(--muted)">{{ cat.sportWinnerClass }}</div>
+                                                                    <div style="margin-top:3px;font:600 11px/1.45 Manrope;color:var(--muted)">{{ cat.sportWinnerDistance }}</div>
+                                                                </sc-if>
+                                                                <sc-if value="{{ cat.noSportWinner }}" hint-placeholder-val="{{ false }}"><div style="margin-top:9px;font:600 11px/1.5 Manrope;color:var(--muted)">{{ t.sportNoWinner }}</div></sc-if>
+                                                            </div>
+                                                            <div style="min-width:0;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--surface)">
+                                                                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                                                                    <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.sportChoiceLabel }}</strong>
+                                                                    <strong style="font:800 15px Manrope;color:#3A8FA3;white-space:nowrap">{{ cat.sportChoicePointsStr }} / {{ cat.sportChoiceMaxStr }}</strong>
+                                                                </div>
+                                                                <div style="margin-top:9px;font:600 11px/1.5 Manrope;color:var(--muted)">{{ cat.sportChoiceCountStr }}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px;padding:9px 11px;border-radius:8px;background:rgba(58,143,163,.1)">
+                                                            <strong style="font:800 12px Manrope;color:var(--ink)">{{ t.sportTotalLabel }}</strong>
+                                                            <strong style="font:800 16px Manrope;color:#3A8FA3">{{ cat.sportTotalStr }} / 10</strong>
+                                                        </div>
+                                                    </div>
+                                                    <div style="padding:11px 16px;border-bottom:1px solid var(--line);background:var(--surface);font:800 12px Manrope;color:var(--muted)">{{ t.sportNearbyTitle }}</div>
                                                 </sc-if>
                                                 <sc-if value="{{ cat.limitNote }}" hint-placeholder-val="{{ false }}">
                                                     <div style="padding:9px 16px;border-bottom:1px solid var(--line);font:700 11px Manrope;color:var(--muted)">{{ cat.limitNote }}</div>
@@ -817,7 +866,7 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, transitInfoOpen: false, parkInfoOpen: false, radiusInfoOpen: false,
+          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, transitInfoOpen: false, parkInfoOpen: false, sportInfoOpen: false, radiusInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -861,7 +910,10 @@
             parkTypes: { park: 'Park', garden: 'Bahçe', leisure_recreation: 'Açık hava dinlenme alanı', landuse_recreation: 'Açık hava dinlenme alanı', village_green: 'Mahalle yeşil alanı', nature_reserve: 'Doğa koruma alanı', national_park: 'Milli park', protected_area: 'Korunan doğa alanı', playground: 'Oyun alanı', dog_park: 'Köpek parkı' },
             parkUnnamedTypes: { park: 'İsimsiz park', garden: 'İsimsiz bahçe', leisure_recreation: 'İsimsiz açık hava dinlenme alanı', landuse_recreation: 'İsimsiz açık hava dinlenme alanı', village_green: 'İsimsiz mahalle yeşil alanı', nature_reserve: 'İsimsiz doğa koruma alanı', national_park: 'İsimsiz milli park', protected_area: 'İsimsiz korunan doğa alanı', playground: 'İsimsiz oyun alanı', dog_park: 'İsimsiz köpek parkı' },
             parkGenericClass: 'Park ve rekreasyon alanı', parkUnnamedGeneric: 'İsimsiz park ve rekreasyon alanı',
-            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', transitHow: 'Nasıl hesaplanır?', parkHow: 'Park skoru nasıl oluşuyor?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
+            sportTypes: { multi_sport_centre: 'Çok amaçlı spor merkezi', general_sports_centre: 'Spor merkezi', sports_hall: 'Spor salonu', fitness_gym: 'Fitness merkezi', swimming: 'Yüzme tesisi', stadium: 'Stadyum', standalone_local: 'Yerel spor alanı', specialized: 'Branşa özel spor tesisi', standalone_specialized: 'Branşa özel spor alanı' },
+            sportUnnamedTypes: { multi_sport_centre: 'İsimsiz çok amaçlı spor merkezi', general_sports_centre: 'İsimsiz spor merkezi', sports_hall: 'İsimsiz spor salonu', fitness_gym: 'İsimsiz fitness merkezi', swimming: 'İsimsiz yüzme tesisi', stadium: 'İsimsiz stadyum', standalone_local: 'İsimsiz spor alanı', specialized: 'İsimsiz branşa özel spor tesisi', standalone_specialized: 'İsimsiz branşa özel spor alanı' },
+            sportGenericClass: 'Spor tesisi', sportUnnamedGeneric: 'İsimsiz spor tesisi',
+            marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', transitHow: 'Nasıl hesaplanır?', parkHow: 'Park skoru nasıl oluşuyor?', sportHow: 'Spor skoru nasıl oluşuyor?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
             radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
             proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
@@ -913,6 +965,13 @@
             parkSecondaryCount: count => count === 0 ? 'Yakında katkı sağlayan oyun alanı veya köpek parkı bulunamadı.' : count + ' yakın oyun alanı veya köpek parkı katkı sağlıyor.',
             parkNearbyTitle: 'Yakındaki park ve rekreasyon alanları',
             parkArea: value => 'yaklaşık ' + value,
+            sportWinnerSummary: (name, dist) => 'En iyi seçenek: ' + name + ' · ' + dist,
+            sportNoWinner: '3 km içinde uygun spor seçeneği bulunamadı',
+            sportBestLabel: 'En iyi spor seçeneği', sportChoiceLabel: 'Yakındaki diğer spor seçenekleri', sportTotalLabel: 'Toplam',
+            sportOverview: 'Spor skoru, 3 km içindeki en kullanışlı spor seçeneğinin uzaklığına ve yakındaki diğer bağımsız spor seçeneklerine göre hesaplanır.',
+            sportDistanceRadius: 'Mesafeler kuş uçuşudur; gerçek giriş ve yürüme yolu farklı olabilir. Haritadaki 1 / 2,5 / 5 km seçimi Spor skorunu değiştirmez.',
+            sportChoiceCount: count => count === 0 ? 'Ek puana katkı sağlayan başka spor seçeneği bulunamadı.' : (count === 1 ? '1 bağımsız spor seçeneği ek puana katkı sağlıyor.' : count + ' bağımsız spor seçeneği ek puana katkı sağlıyor.'),
+            sportNearbyTitle: 'Yakındaki spor seçenekleri',
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -952,7 +1011,10 @@
             parkTypes: { park: 'Park', garden: 'Garden', leisure_recreation: 'Outdoor recreation area', landuse_recreation: 'Outdoor recreation area', village_green: 'Neighbourhood green', nature_reserve: 'Nature reserve', national_park: 'National park', protected_area: 'Protected natural area', playground: 'Playground', dog_park: 'Dog park' },
             parkUnnamedTypes: { park: 'Unnamed park', garden: 'Unnamed garden', leisure_recreation: 'Unnamed outdoor recreation area', landuse_recreation: 'Unnamed outdoor recreation area', village_green: 'Unnamed neighbourhood green', nature_reserve: 'Unnamed nature reserve', national_park: 'Unnamed national park', protected_area: 'Unnamed protected natural area', playground: 'Unnamed playground', dog_park: 'Unnamed dog park' },
             parkGenericClass: 'Park or recreation area', parkUnnamedGeneric: 'Unnamed park or recreation area',
-            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', transitHow: 'How is this calculated?', parkHow: 'How is the Park score built?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
+            sportTypes: { multi_sport_centre: 'Multi-purpose sports centre', general_sports_centre: 'Sports centre', sports_hall: 'Sports hall', fitness_gym: 'Fitness centre', swimming: 'Swimming facility', stadium: 'Stadium', standalone_local: 'Local sports area', specialized: 'Specialist sports facility', standalone_specialized: 'Specialist sports area' },
+            sportUnnamedTypes: { multi_sport_centre: 'Unnamed multi-purpose sports centre', general_sports_centre: 'Unnamed sports centre', sports_hall: 'Unnamed sports hall', fitness_gym: 'Unnamed fitness centre', swimming: 'Unnamed swimming facility', stadium: 'Unnamed stadium', standalone_local: 'Unnamed sports area', specialized: 'Unnamed specialist sports facility', standalone_specialized: 'Unnamed specialist sports area' },
+            sportGenericClass: 'Sports facility', sportUnnamedGeneric: 'Unnamed sports facility',
+            marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', transitHow: 'How is this calculated?', parkHow: 'How is the Park score built?', sportHow: 'How is the Sport score built?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
             radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
             proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
@@ -1004,6 +1066,13 @@
             parkSecondaryCount: count => count === 0 ? 'No nearby playground or dog park contributes.' : (count === 1 ? '1 nearby playground or dog park contributes.' : count + ' nearby playgrounds or dog parks contribute.'),
             parkNearbyTitle: 'Nearby parks and recreation',
             parkArea: value => 'about ' + value,
+            sportWinnerSummary: (name, dist) => 'Best option: ' + name + ' · ' + dist,
+            sportNoWinner: 'No suitable sports option found within 3 km',
+            sportBestLabel: 'Best sports option', sportChoiceLabel: 'Other nearby sports options', sportTotalLabel: 'Total',
+            sportOverview: 'The Sport score is based on the distance to the most useful sports option within 3 km and other independent sports options nearby.',
+            sportDistanceRadius: 'Distances are straight-line; the actual entrance and walking route may differ. Changing the 1 / 2.5 / 5 km display radius does not change the Sport score.',
+            sportChoiceCount: count => count === 0 ? 'No other sports option contributes extra points.' : (count === 1 ? '1 independent sports option contributes extra points.' : count + ' independent sports options contribute extra points.'),
+            sportNearbyTitle: 'Nearby sports options',
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -1043,7 +1112,10 @@
             parkTypes: { park: 'Park', garden: 'Tuin', leisure_recreation: 'Groene recreatieplek', landuse_recreation: 'Groene recreatieplek', village_green: 'Buurtgroen', nature_reserve: 'Natuurgebied', national_park: 'Nationaal park', protected_area: 'Beschermd natuurgebied', playground: 'Speeltuin', dog_park: 'Hondenweide' },
             parkUnnamedTypes: { park: 'Naamloos park', garden: 'Naamloze tuin', leisure_recreation: 'Naamloze groene recreatieplek', landuse_recreation: 'Naamloze groene recreatieplek', village_green: 'Naamloos buurtgroen', nature_reserve: 'Naamloos natuurgebied', national_park: 'Naamloos nationaal park', protected_area: 'Naamloos beschermd natuurgebied', playground: 'Naamloze speeltuin', dog_park: 'Naamloze hondenweide' },
             parkGenericClass: 'Park of recreatiegebied', parkUnnamedGeneric: 'Naamloos park of recreatiegebied',
-            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', transitHow: 'Hoe wordt dit berekend?', parkHow: 'Hoe is de Parkscore opgebouwd?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
+            sportTypes: { multi_sport_centre: 'Multifunctioneel sportcentrum', general_sports_centre: 'Sportcentrum', sports_hall: 'Sporthal', fitness_gym: 'Fitnesscentrum', swimming: 'Zwemvoorziening', stadium: 'Stadion', standalone_local: 'Lokale sportplek', specialized: 'Gespecialiseerde sportvoorziening', standalone_specialized: 'Gespecialiseerde sportplek' },
+            sportUnnamedTypes: { multi_sport_centre: 'Naamloos multifunctioneel sportcentrum', general_sports_centre: 'Naamloos sportcentrum', sports_hall: 'Naamloze sporthal', fitness_gym: 'Naamloos fitnesscentrum', swimming: 'Naamloze zwemvoorziening', stadium: 'Naamloos stadion', standalone_local: 'Naamloze sportplek', specialized: 'Naamloze gespecialiseerde sportvoorziening', standalone_specialized: 'Naamloze gespecialiseerde sportplek' },
+            sportGenericClass: 'Sportvoorziening', sportUnnamedGeneric: 'Naamloze sportvoorziening',
+            marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', transitHow: 'Hoe wordt dit berekend?', parkHow: 'Hoe is de Parkscore opgebouwd?', sportHow: 'Hoe is de Sportscore opgebouwd?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
             radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
             proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
@@ -1095,6 +1167,13 @@
             parkSecondaryCount: count => count === 0 ? 'Geen speeltuin of hondenweide in de buurt draagt bij.' : (count === 1 ? '1 speeltuin of hondenweide in de buurt draagt bij.' : count + ' speeltuinen of hondenweides in de buurt dragen bij.'),
             parkNearbyTitle: 'Parken en recreatie in de buurt',
             parkArea: value => 'ongeveer ' + value,
+            sportWinnerSummary: (name, dist) => 'Beste optie: ' + name + ' · ' + dist,
+            sportNoWinner: 'Geen geschikte sportoptie gevonden binnen 3 km',
+            sportBestLabel: 'Beste sportoptie', sportChoiceLabel: 'Andere sportopties in de buurt', sportTotalLabel: 'Totaal',
+            sportOverview: 'De Sportscore is gebaseerd op de afstand tot de meest bruikbare sportoptie binnen 3 km en andere onafhankelijke sportopties in de buurt.',
+            sportDistanceRadius: 'Afstanden zijn hemelsbreed; de werkelijke ingang en wandelroute kunnen verschillen. Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de Sportscore niet.',
+            sportChoiceCount: count => count === 0 ? 'Geen andere sportoptie draagt bij aan extra punten.' : (count === 1 ? '1 onafhankelijke sportoptie draagt bij aan extra punten.' : count + ' onafhankelijke sportopties dragen bij aan extra punten.'),
+            sportNearbyTitle: 'Sportopties in de buurt',
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -1247,6 +1326,33 @@
         const winner = breakdown && breakdown.winner;
         if (!winner) return t.parkNoWinner;
         return t.parkWinnerSummary(this.parkName(winner, t), this.fmtParkDistance(winner.distance_m));
+      }
+      fmtSportValue(value) { return this.fmtParkValue(value); }
+      fmtSportDistance(value) { return this.fmtParkDistance(value); }
+      sportClassLabel(value, t) { return t.sportTypes[value] || t.sportGenericClass; }
+      isTechnicalSportName(value) {
+        if (!value || !String(value).trim()) return true;
+        const name = String(value).trim();
+        return /^unnamed$/i.test(name) || /^(?:sport(?::osm)?:|(?:node|way|relation):)/i.test(name);
+      }
+      sportName(item, t) {
+        if (!item) return t.sportUnnamedGeneric;
+        const name = [item.display_name, item.name].find(value => !this.isTechnicalSportName(value));
+        return name ? String(name).trim() : (t.sportUnnamedTypes[item.facility_class] || t.sportUnnamedGeneric);
+      }
+      sportWinner(breakdown) {
+        return breakdown && breakdown.best && breakdown.best.winner ? breakdown.best.winner : null;
+      }
+      sportSummary(breakdown, t) {
+        const winner = this.sportWinner(breakdown);
+        if (!winner) return t.sportNoWinner;
+        const distance = this.fmtSportDistance(winner.distance_m);
+        return t.sportWinnerSummary(this.sportName(winner, t), distance || '—');
+      }
+      visibleSportItems(category) {
+        return category && Array.isArray(category.items)
+          ? category.items.filter(item => item && item.score_eligible === true)
+          : [];
       }
       scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
 
@@ -1418,10 +1524,11 @@
         this.mk = {}; this.groups = {};
         d.categories.forEach(cat => {
           const g = L.layerGroup(); this.mk[cat.key] = [];
-          cat.items.forEach((it, i) => {
+          const visibleItems = cat.key === 'sport' ? this.visibleSportItems(cat) : cat.items;
+          visibleItems.forEach((it, i) => {
             const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
-            const markerName = cat.key === 'park' ? this.parkName(it, t) : it.name;
-            const markerType = cat.key === 'park' ? '<br>' + this.parkClassLabel(it.park_class, t) : '';
+            const markerName = cat.key === 'park' ? this.parkName(it, t) : (cat.key === 'sport' ? this.sportName(it, t) : it.name);
+            const markerType = cat.key === 'park' ? '<br>' + this.parkClassLabel(it.park_class, t) : (cat.key === 'sport' ? '<br>' + this.sportClassLabel(it.facility_class, t) : '');
             const m = L.circleMarker([it.lat, it.lon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
               .bindPopup('<b>' + markerName + '</b>' + markerType + '<br>📍 ' + t.straightLine + ': ' + this.fmtDist(straight) + '<br>🚶 ' + t.estimatedWalk + ': ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>🚗 ' + t.estimatedDrive + ': ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
             m.addTo(g); this.mk[cat.key][i] = m;
@@ -1499,27 +1606,32 @@
           const transitBreakdown = cat.key === 'transit' && cat.score_breakdown ? cat.score_breakdown : null;
           const parkBreakdown = cat.key === 'park' && cat.score_breakdown ? cat.score_breakdown : null;
           const parkWinner = parkBreakdown && parkBreakdown.winner ? parkBreakdown.winner : null;
+          const sportBreakdown = cat.key === 'sport' && cat.score_breakdown ? cat.score_breakdown : null;
+          const sportWinner = this.sportWinner(sportBreakdown);
+          const visibleItems = cat.key === 'sport' ? this.visibleSportItems(cat) : cat.items;
+          const visibleCount = cat.count;
           const hasLocalTransit = !!(transitBreakdown && transitBreakdown.best_local_logical_stop_id);
           const hasRailTransit = !!(transitBreakdown && transitBreakdown.best_rail_logical_station_id);
           const localModes = transitBreakdown ? this.fmtTransitModes(transitBreakdown.best_local_modes, t) : '';
           const localOperators = transitBreakdown && Array.isArray(transitBreakdown.best_local_operators)
             ? transitBreakdown.best_local_operators.filter(Boolean).join(', ') : '';
           return {
-            key: cat.key, label: t.cats[cat.key], count: cat.count, isOpen: open,
-            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isTransit: cat.key === 'transit', isPark: cat.key === 'park',
-            isGenericSummary: cat.key !== 'health' && cat.key !== 'transit' && cat.key !== 'park',
-            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' ? S.healthInfoOpen : (cat.key === 'transit' ? S.transitInfoOpen : (cat.key === 'park' && S.parkInfoOpen)))),
+            key: cat.key, label: t.cats[cat.key], count: visibleCount, isOpen: open,
+            isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isTransit: cat.key === 'transit', isPark: cat.key === 'park', isSport: cat.key === 'sport',
+            isGenericSummary: cat.key !== 'health' && cat.key !== 'transit' && cat.key !== 'park' && cat.key !== 'sport',
+            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' ? S.healthInfoOpen : (cat.key === 'transit' ? S.transitInfoOpen : (cat.key === 'park' ? S.parkInfoOpen : (cat.key === 'sport' && S.sportInfoOpen))))),
             icon: this.ic(cat.key, col, 19),
             iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
-            scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : this.fmtScore(cat.score)),
+            scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : (cat.key === 'sport' ? this.fmtSportValue(cat.score) : this.fmtScore(cat.score))),
             scoreStyle: { font: '800 17px Manrope', color: sc },
             barStyle: { height: '100%', width: (cat.score * 10) + '%', borderRadius: '3px', background: sc, transition: 'width .5s ease' },
-            countStr: cat.count + ' ' + t.points,
+            countStr: visibleCount + ' ' + t.points,
             nearestStr: t.nearest + ' ' + this.fmtDist(cat.nearest_m) + ' ' + t.straightSuffix,
             transitSummaryStr: cat.key === 'transit' ? this.transitSummary(transitBreakdown, t) : '',
             parkSummaryStr: cat.key === 'park' ? this.parkSummary(parkBreakdown, t) : '',
+            sportSummaryStr: cat.key === 'sport' ? this.sportSummary(sportBreakdown, t) : '',
             marketNote: cat.key === 'market' ? t.marketNote : null,
-            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park') && !!cat.score_breakdown,
+            hasBreakdown: (cat.key === 'market' || cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park' || cat.key === 'sport') && !!cat.score_breakdown,
             proximityStr: (cat.key === 'market' || cat.key === 'school') && cat.score_breakdown ? (cat.key === 'school'
               ? this.fmtSchoolBreakdownScore(cat.score_breakdown.proximity_points)
               : this.fmtScore(cat.score_breakdown.proximity_points)) : '',
@@ -1585,6 +1697,15 @@
             parkWinnerClass: parkWinner ? this.parkClassLabel(parkWinner.park_class, t) : '',
             parkWinnerDistance: parkWinner ? t.straightLine + ' ' + this.fmtParkDistance(parkWinner.distance_m) : '',
             parkWinnerArea: parkWinner ? this.fmtParkArea(parkWinner.area_m2, t) : '',
+            hasSportWinner: !!sportWinner, noSportWinner: cat.key === 'sport' && !sportWinner,
+            sportBestPointsStr: sportBreakdown && sportBreakdown.best ? this.fmtSportValue(sportBreakdown.best.points) : '—',
+            sportChoicePointsStr: sportBreakdown && sportBreakdown.choice ? this.fmtSportValue(sportBreakdown.choice.points) : '—',
+            sportBestMaxStr: this.fmtSportValue(7.5), sportChoiceMaxStr: this.fmtSportValue(2.5),
+            sportTotalStr: cat.key === 'sport' ? this.fmtSportValue(cat.score) : '',
+            sportWinnerName: sportWinner ? this.sportName(sportWinner, t) : '',
+            sportWinnerClass: sportWinner ? this.sportClassLabel(sportWinner.facility_class, t) : '',
+            sportWinnerDistance: sportWinner && Number.isFinite(sportWinner.distance_m) ? t.straightLine + ' ' + this.fmtSportDistance(sportWinner.distance_m) : '',
+            sportChoiceCountStr: sportBreakdown && sportBreakdown.choice ? t.sportChoiceCount(Number.isFinite(sportBreakdown.choice.alternatives_used) ? sportBreakdown.choice.alternatives_used : (Array.isArray(sportBreakdown.choice.alternatives) ? sportBreakdown.choice.alternatives.length : 0)) : t.sportChoiceCount(0),
             toggleInfo: () => cat.key === 'school'
               ? this.setState({ schoolInfoOpen: !this.state.schoolInfoOpen })
               : (cat.key === 'health'
@@ -1593,8 +1714,10 @@
                       ? this.setState({ transitInfoOpen: !this.state.transitInfoOpen })
                       : (cat.key === 'park'
                           ? this.setState({ parkInfoOpen: !this.state.parkInfoOpen })
-                          : this.setState({ marketInfoOpen: !this.state.marketInfoOpen })))),
-            limitNote: cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
+                          : (cat.key === 'sport'
+                              ? this.setState({ sportInfoOpen: !this.state.sportInfoOpen })
+                              : this.setState({ marketInfoOpen: !this.state.marketInfoOpen }))))),
+            limitNote: cat.key !== 'sport' && cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
             chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
             toggle: () => this.setState({ open: open ? null : cat.key }),
             toggleFilter: () => {
@@ -1607,10 +1730,10 @@
               border: '1px solid ' + (hid ? 'var(--line)' : col), background: hid ? 'var(--surface)' : col, color: hid ? 'var(--muted)' : '#fff',
               font: '700 ' + (narrow ? '11px' : '12px') + ' Manrope', cursor: 'pointer', boxShadow: 'var(--shadow)', opacity: hid ? 0.8 : 1
             },
-            rows: cat.items.map((it, i) => {
+            rows: visibleItems.map((it, i) => {
               const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
               return {
-                name: cat.key === 'park' ? this.parkName(it, t) : it.name,
+                name: cat.key === 'park' ? this.parkName(it, t) : (cat.key === 'sport' ? this.sportName(it, t) : it.name),
                 typeStr: cat.key === 'school'
                   ? (t.schoolTypes[it.type] || it.type || '')
                   : (cat.key === 'health'
@@ -1619,8 +1742,10 @@
                           ? (t.transitDisplayTypes[it.display_type] || t.transitDisplayTypes.transit_point)
                           : (cat.key === 'park'
                               ? this.parkClassLabel(it.park_class, t)
-                              : (it.type || '')))),
-                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park') ? 'none' : 'capitalize' },
+                              : (cat.key === 'sport'
+                                  ? this.sportClassLabel(it.facility_class, t)
+                                  : (it.type || ''))))),
+                typeStyle: { font: '600 10.5px Manrope', color: 'var(--muted)', textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park' || cat.key === 'sport') ? 'none' : 'capitalize' },
                 areaStr: cat.key === 'park' ? this.fmtParkArea(it.area_m2, t) : '',
                 straightStr: t.straightLine + ' ' + this.fmtDist(straight),
                 walkStr: t.estimatedWalk + ' ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU,
@@ -1634,7 +1759,7 @@
 
         const overall = d ? d.overall : 0, oc = this.scoreColor(overall);
         const ci = overall >= 8 ? 0 : overall >= 7 ? 1 : overall >= 5.5 ? 2 : overall >= 4 ? 3 : 4;
-        const poiTotal = d ? d.categories.reduce((s, c) => s + c.count, 0) : 0;
+        const poiTotal = d ? d.categories.reduce((s, c) => s + (c.count || 0), 0) : 0;
 
         const ERR = {
           notfound: [t.errNotfoundT, t.errNotfoundD],

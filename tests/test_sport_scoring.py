@@ -279,6 +279,42 @@ class SportBackendIntegrationTests(unittest.TestCase):
                              [results[0][4][key]] * 3)
         self.assertEqual(results[0][0].iloc[0]["sport_id"], "sport:1")
 
+    def test_display_eligibility_filter_precedes_count_sort_and_topn(self):
+        origin = (51.0, 4.84)
+        rows = []
+        for index in range(1, 26):
+            point = Geodesic.WGS84.Direct(*origin, 90, 100 + index)
+            rows.append(cache_row(
+                f"sport:{index}", point["lat2"], point["lon2"],
+                name=f"Ineligible {index}",
+                facility_class="standalone_local", eligible=False))
+        for index, distance in ((26, 500), (27, 700), (28, 1500)):
+            point = Geodesic.WGS84.Direct(*origin, 90, distance)
+            rows.append(cache_row(
+                f"sport:{index}", point["lat2"], point["lon2"],
+                name=f"Eligible {index}",
+                facility_class="multi_sport_centre"))
+
+        path = Path(self.temp_dir.name) / "eligibility_order.parquet"
+        pq.write_table(pa.Table.from_pylist(rows, schema=sport_schema()), path)
+        with duckdb.connect() as con:
+            frame, score, count, nearest, breakdown = app.analyze_sport(
+                con, str(path), *origin, 1000, 2)
+
+        self.assertEqual(count, 2)
+        self.assertAlmostEqual(nearest, 500.0, places=5)
+        self.assertEqual(frame["sport_id"].tolist(), ["sport:26", "sport:27"])
+        self.assertTrue(frame["score_eligible"].all())
+        self.assertEqual(score, breakdown["score"])
+
+        with duckdb.connect() as con:
+            wider = app.analyze_sport(con, str(path), *origin, 2500, 2)
+        self.assertEqual(wider[2], 3)
+        self.assertEqual(wider[0]["sport_id"].tolist(),
+                         ["sport:26", "sport:27"])
+        for key in ("score_precise", "score", "best", "choice"):
+            self.assertEqual(wider[4][key], breakdown[key])
+
     def test_legacy_generic_sport_paths_are_explicitly_rejected(self):
         with duckdb.connect() as con:
             with self.assertRaisesRegex(ValueError, "dedicated analyze_sport"):
@@ -326,6 +362,12 @@ class RealBelgiumSportRegressionTests(unittest.TestCase):
                         self.assertEqual(
                             [item[field] for item in breakdowns],
                             [breakdowns[0][field]] * 3)
+                    self.assertTrue(all(
+                        result[0]["score_eligible"].all()
+                        for result in results if not result[0].empty))
+                    if name == "Gijmelstraat":
+                        self.assertEqual([result[2] for result in results],
+                                         [1, 14, 31])
 
     @unittest.skipUnless(cache_path.is_file(), "real Sport cache unavailable")
     def test_locked_canonicalization_and_eligibility_semantics(self):

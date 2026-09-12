@@ -328,6 +328,7 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         self.assertEqual(sports[0]["items"][0]["facility_class"],
                          "fitness_gym")
         self.assertEqual(sports[0]["items"][0]["sport_id"], "sport:demo:1")
+        self.assertTrue(sports[0]["items"][0]["score_eligible"])
         self.assertNotIn("geometry_wkb", sports[0]["items"][0])
 
     def test_overall_uses_public_park_score_with_existing_weights(self):
@@ -406,6 +407,46 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
                     self.assertEqual(breakdowns, [breakdowns[0]] * 3)
                     self.assertAlmostEqual(
                         breakdowns[0]["score_precise"], expected, places=8)
+
+
+class RealBelgiumSportPreviewApiTests(unittest.TestCase):
+    sport_path = SOURCE_DIR / "cache" / "be_sport_destinations.parquet"
+
+    @unittest.skipUnless(sport_path.is_file(), "real Sport cache unavailable")
+    def test_gijmel_winner_and_display_filter_contract(self):
+        payloads = []
+        with patch.object(server, "SPORT_PATH", str(self.sport_path)):
+            for radius in (1000, 2500, 5000):
+                with server.duckdb.connect() as con:
+                    _frame, score, _count, _nearest, breakdown = server.analyze_sport(
+                        con, str(self.sport_path), 51.0034977, 4.8405107,
+                        radius, 20)
+                    payloads.append(server._category_payload(
+                        con, "sport", 51.0034977, 4.8405107, radius, 20,
+                        score, breakdown))
+
+        self.assertEqual([payload["score"] for payload in payloads],
+                         [7.6, 7.6, 7.6])
+        self.assertEqual([payload["score_breakdown"] for payload in payloads],
+                         [payloads[0]["score_breakdown"]] * 3)
+        winner = payloads[0]["score_breakdown"]["best"]["winner"]
+        self.assertEqual(winner["display_name"], "Basic-Fit")
+        self.assertEqual(winner["facility_class"], "fitness_gym")
+        self.assertAlmostEqual(winner["distance_m"], 645.082966300914)
+
+        self.assertEqual([payload["count"] for payload in payloads],
+                         [1, 14, 31])
+        self.assertEqual([len(payload["items"]) for payload in payloads],
+                         [1, 14, 20])
+        self.assertTrue(all(
+            item["score_eligible"]
+            for payload in payloads for item in payload["items"]
+        ))
+        self.assertNotIn(
+            "sport:osm:way:189639931",
+            [item["sport_id"] for payload in payloads
+             for item in payload["items"]],
+        )
 
 
 class ParkFrontendContentTests(unittest.TestCase):
@@ -783,7 +824,7 @@ class HealthExplanationContentTests(unittest.TestCase):
             self.frontend,
         )
         self.assertIn(
-            "textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park') ? 'none' : 'capitalize'",
+            "textTransform: (cat.key === 'school' || cat.key === 'health' || cat.key === 'transit' || cat.key === 'park' || cat.key === 'sport') ? 'none' : 'capitalize'",
             self.frontend,
         )
 
@@ -900,7 +941,7 @@ class TransitExplanationContentTests(unittest.TestCase):
             self.frontend,
         )
         self.assertIn(
-            "scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : this.fmtScore(cat.score))",
+            "scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : (cat.key === 'sport' ? this.fmtSportValue(cat.score) : this.fmtScore(cat.score)))",
             self.frontend,
         )
         self.assertNotIn(
@@ -950,6 +991,129 @@ class TransitExplanationContentTests(unittest.TestCase):
             "? (t.transitDisplayTypes[it.display_type] || it.type",
             self.frontend,
         )
+
+
+class SportFrontendContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_collapsed_summary_uses_authoritative_winner(self):
+        start = self.frontend.index("sportSummary(breakdown, t)")
+        end = self.frontend.index("scoreColor(s)", start)
+        summary = self.frontend[start:end]
+        self.assertIn("this.sportWinner(breakdown)", summary)
+        self.assertIn("winner.distance_m", summary)
+        self.assertNotIn("nearest_m", summary)
+        self.assertNotIn("category.count", summary)
+
+    def test_two_component_breakdown_uses_backend_points_and_total(self):
+        for source in (
+            "sportBreakdown.best.points",
+            "sportBreakdown.choice.points",
+            "sportTotalStr: cat.key === 'sport' ? this.fmtSportValue(cat.score) : ''",
+            "sportBestMaxStr: this.fmtSportValue(7.5)",
+            "sportChoiceMaxStr: this.fmtSportValue(2.5)",
+        ):
+            self.assertIn(source, self.frontend)
+        self.assertNotIn(
+            "sportBreakdown.best.points + sportBreakdown.choice.points",
+            self.frontend,
+        )
+        self.assertNotIn("sportDiversity", self.frontend)
+
+    def test_compact_explanation_exists_in_all_languages(self):
+        for text in (
+            "Spor skoru, 3 km içindeki en kullanışlı spor seçeneğinin uzaklığına ve yakındaki diğer bağımsız spor seçeneklerine göre hesaplanır.",
+            "Haritadaki 1 / 2,5 / 5 km seçimi Spor skorunu değiştirmez.",
+            "The Sport score is based on the distance to the most useful sports option within 3 km and other independent sports options nearby.",
+            "Changing the 1 / 2.5 / 5 km display radius does not change the Sport score.",
+            "De Sportscore is gebaseerd op de afstand tot de meest bruikbare sportoptie binnen 3 km en andere onafhankelijke sportopties in de buurt.",
+            "Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de Sportscore niet.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_all_facility_classes_are_localized_in_all_languages(self):
+        classes = (
+            "multi_sport_centre", "general_sports_centre", "sports_hall",
+            "fitness_gym", "swimming", "stadium", "standalone_local",
+            "specialized", "standalone_specialized",
+        )
+        for facility_class in classes:
+            self.assertEqual(
+                self.frontend.count(" " + facility_class + ":"),
+                6,
+                msg=facility_class,
+            )
+        for label in (
+            "Çok amaçlı spor merkezi", "Multi-purpose sports centre",
+            "Multifunctioneel sportcentrum", "İsimsiz yüzme tesisi",
+            "Unnamed swimming facility", "Naamloze zwemvoorziening",
+        ):
+            self.assertIn(label, self.frontend)
+
+    def test_rows_and_map_use_localized_name_and_class_helpers(self):
+        for source in (
+            "this.sportName(it, t)",
+            "this.sportClassLabel(it.facility_class, t)",
+            "this.sportName(sportWinner, t)",
+            "this.sportClassLabel(sportWinner.facility_class, t)",
+        ):
+            self.assertIn(source, self.frontend)
+        self.assertIn(
+            "sportClassLabel(value, t) { return t.sportTypes[value] || t.sportGenericClass; }",
+            self.frontend,
+        )
+
+    def test_technical_names_use_localized_class_fallback(self):
+        helper_start = self.frontend.index("isTechnicalSportName(value)")
+        helper_end = self.frontend.index("sportWinner(breakdown)", helper_start)
+        helper = self.frontend[helper_start:helper_end]
+        self.assertIn("sport(?::osm)?", helper)
+        self.assertIn("node|way|relation", helper)
+        self.assertIn("t.sportUnnamedTypes[item.facility_class]", helper)
+        self.assertIn("t.sportUnnamedGeneric", helper)
+
+    def test_ineligible_items_are_filtered_from_map_and_list(self):
+        self.assertIn(
+            "category.items.filter(item => item && item.score_eligible === true)",
+            self.frontend,
+        )
+        self.assertGreaterEqual(
+            self.frontend.count(
+                "cat.key === 'sport' ? this.visibleSportItems(cat) : cat.items"),
+            2,
+        )
+        self.assertIn(
+            "const visibleCount = cat.count;",
+            self.frontend,
+        )
+        self.assertIn(
+            "d.categories.reduce((s, c) => s + (c.count || 0), 0)",
+            self.frontend,
+        )
+
+    def test_zero_winner_and_zero_alternative_states_are_localized(self):
+        for text in (
+            "3 km içinde uygun spor seçeneği bulunamadı",
+            "No suitable sports option found within 3 km",
+            "Geen geschikte sportoptie gevonden binnen 3 km",
+            "Ek puana katkı sağlayan başka spor seçeneği bulunamadı.",
+            "No other sports option contributes extra points.",
+            "Geen andere sportoptie draagt bij aan extra punten.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_existing_category_explanations_remain_present(self):
+        for text in (
+            "The Market score is always calculated using grocery options within 2.5 km of the address.",
+            "The School score is always calculated using education options within a 2.5 km radius.",
+            "The Health score has three components",
+            "The most useful regular scheduled stop within 1 km is evaluated.",
+            "The Park score combines the best park option",
+        ):
+            self.assertIn(text, self.frontend)
 
 
 if __name__ == "__main__":
