@@ -12,6 +12,8 @@ from park_scoring import (PARK_SCORING_RADIUS_M, geometry_distance_m,
                           park_score_components)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, calc_school_score,
                             deduplicate_school_pois)
+from sport_scoring import (SPORT_SCORING_RADIUS_M, destination_distance_m,
+                           sport_score_components)
 from transit_scoring import (LOCAL_SCORING_RADIUS_M, RADIUS_EPSILON_M,
                              RAIL_SCORING_RADIUS_M, transit_score_components)
 
@@ -50,7 +52,6 @@ OVERALL_WEIGHTS = {
 # Nsat: sayıda doygunluğa ulaşılacak değer
 SCORING = {
     "park":   {"D0": 1200, "w_prox": 6.0, "w_count": 4.0, "Nsat": 3},
-    "sport":  {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
 }
 
 # ===========================================================
@@ -93,11 +94,6 @@ SCORES = {
         (CASE WHEN leisure='playground' THEN 50 ELSE 0 END) +
         (CASE WHEN landuse='grass' THEN 20 ELSE 0 END) +
         (CASE WHEN boundary='national_park' THEN 15 ELSE 0 END)
-    """,
-    "sport": """
-        (CASE WHEN leisure='fitness_centre' OR amenity='gym' THEN 90 ELSE 0 END) +
-        (CASE WHEN leisure='sports_centre' THEN 80 ELSE 0 END) +
-        (CASE WHEN sport IS NOT NULL THEN 20 ELSE 0 END)
     """,
 }
 
@@ -531,6 +527,110 @@ def analyze_park(con, park_path, lat, lon, display_radius_m, topn):
             d_min, components)
 
 
+def resolve_sport_cache_path(nodes_path, polys_path, sport_path=None):
+    """Resolve Sport cache; an explicit missing path fails, never falls back."""
+    explicit = sport_path is not None
+    candidate = sport_path
+    if candidate is None:
+        source_path = nodes_path or polys_path
+        if source_path:
+            candidate = os.path.join(
+                os.path.dirname(os.path.abspath(source_path)),
+                "be_sport_destinations.parquet")
+    if not candidate or not os.path.isfile(candidate):
+        if not explicit:
+            return None
+        raise FileNotFoundError(
+            "Dedicated Sport cache not found: be_sport_destinations.parquet")
+    return os.path.abspath(candidate)
+
+
+def query_sport_candidates(con, sport_path, lat, lon, radius_m):
+    """BBox-prune Sport destinations, then apply authoritative geometry distance."""
+    if not sport_path or not os.path.isfile(sport_path):
+        raise FileNotFoundError(
+            "Dedicated Sport cache not found: be_sport_destinations.parquet")
+    # Entrances are validated within three metres of their canonical polygon.
+    # A small bbox margin prevents one just inside the radius from being pruned
+    # because the polygon itself starts just outside it.
+    lat_min, lat_max, lon_min, lon_max = transit_bounding_box(
+        lat, lon, float(radius_m) + 5.0)
+    query = f"""
+    SELECT sport_id, canonical_osm_type, canonical_osm_id,
+           name, display_name, display_name_source, facility_class,
+           score_eligible, eligibility_reason, specialized, standalone,
+           sports, direct_sports, component_sports, sport_count,
+           component_count, access_raw, access_class, access_evidence,
+           fee, membership, operator, opening_hours, club,
+           is_commercial, is_public_operator, is_school_context,
+           indoor, covered, building, wikidata, wikipedia,
+           geometry_wkb, representative_lat, representative_lon,
+           entrance_lat, entrance_lon, entrance_osm_key,
+           canonicalization_method
+    FROM read_parquet('{_duckdb_path(sport_path)}')
+    WHERE bbox_max_lat >= {lat_min} AND bbox_min_lat <= {lat_max}
+      AND bbox_max_lon >= {lon_min} AND bbox_min_lon <= {lon_max}
+    """
+    candidates = con.execute(query).df().to_dict("records")
+    output = []
+    for candidate in candidates:
+        distance, method = destination_distance_m(lat, lon, candidate)
+        if distance <= float(radius_m):
+            candidate["distance_m"] = float(distance)
+            candidate["distance_method"] = method
+            candidate["sports"] = list(candidate.get("sports"))
+            candidate["direct_sports"] = list(candidate.get("direct_sports"))
+            candidate["component_sports"] = list(
+                candidate.get("component_sports"))
+            candidate.pop("geometry_wkb", None)
+            output.append(candidate)
+    return output
+
+
+def analyze_sport(con, sport_path, lat, lon, display_radius_m, topn):
+    """Compute fixed-radius Sport V1 and canonical radius-driven display rows."""
+    if not sport_path:
+        components = sport_score_components([])
+        return pd.DataFrame(), components["score"], 0, None, components
+    query_radius = max(float(display_radius_m), SPORT_SCORING_RADIUS_M)
+    candidates = query_sport_candidates(
+        con, sport_path, lat, lon, query_radius)
+    components = sport_score_components(candidates)
+
+    display_rows = [row for row in candidates
+                    if row["distance_m"] <= float(display_radius_m)]
+    display_rows.sort(key=lambda row: (
+        float(row["distance_m"]), str(row.get("sport_id") or "")))
+    n_total = len(display_rows)
+    d_min = min((row["distance_m"] for row in display_rows), default=None)
+    output = []
+    for candidate in display_rows[:max(0, int(topn))]:
+        distance = float(candidate["distance_m"])
+        row = dict(candidate)
+        row_name = next((value for value in (
+            row.get("display_name"), row.get("name"), row.get("sport_id"))
+            if pd.notnull(value) and str(value).strip()), "Unnamed")
+        row.update({
+            "name": row_name,
+            "brand": None, "amenity": None, "shop": None,
+            "healthcare": None, "leisure": row["facility_class"],
+            "sport": None,
+            "lat": float(row["representative_lat"]),
+            "lon": float(row["representative_lon"]),
+            "score": 0.0, "d_lin": distance, "d_min": d_min,
+            "n_total": n_total, "has_hospital_any": 0,
+            "walk_m": distance * WALK_CIRCUITY,
+            "drive_m": distance * DRIVE_CIRCUITY,
+            "walk_s": ((distance * WALK_CIRCUITY)
+                       / (WALK_SPEED_KPH * 1000 / 3600)),
+            "drive_s": ((distance * DRIVE_CIRCUITY)
+                        / (DRIVE_SPEED_KPH * 1000 / 3600)),
+        })
+        output.append(row)
+    return (pd.DataFrame(output), components["score"], n_total,
+            d_min, components)
+
+
 def query_transit_local_candidates(con, stops_path, summary_path, lat, lon):
     """Join fixed-radius service metadata to each logical stop's nearest member."""
     lat_min, lat_max, lon_min, lon_max = transit_bounding_box(
@@ -647,6 +747,8 @@ def query_category(con, nodes_path, polys_path, cat, lat, lon, radius_m, topn):
         raise ValueError("Health uses the dedicated analyze_health() Health Score V1 path.")
     if cat == "park":
         raise ValueError("Park uses the dedicated analyze_park() Park Score V1 path.")
+    if cat == "sport":
+        raise ValueError("Sport uses the dedicated analyze_sport() Sport Score V1 path.")
     dlat, dlon = meters_to_deg_latlon(lat, radius_m)
     lat_min, lat_max = lat - dlat, lat + dlat
     lon_min, lon_max = lon - dlon, lon + dlon
@@ -727,6 +829,8 @@ def calc_category_score(cat, n_total:int, d_min:float, has_hospital:bool=False) 
         raise ValueError("Transit uses transit_score_components() in the dedicated Transit Score V1 path.")
     if cat == "park":
         raise ValueError("Park uses park_score_components() in the dedicated Park Score V1 path.")
+    if cat == "sport":
+        raise ValueError("Sport uses sport_score_components() in the dedicated Sport Score V1 path.")
     # Kategoriye göre konfig
     cfg = SCORING[cat]
     D0 = cfg["D0"]
@@ -761,6 +865,8 @@ def main():
     ap.add_argument("--polys", type=str, default="./cache/be_poi_poly.parquet")
     ap.add_argument("--parks", type=str,
                     default="./cache/be_park_destinations.parquet")
+    ap.add_argument("--sports", type=str,
+                    default="./cache/be_sport_destinations.parquet")
     args = ap.parse_args()
 
     # konum
@@ -791,6 +897,7 @@ def main():
     summary_rows=[]  # kategori scorecard için
     transit_paths = resolve_transit_cache_paths(nodes_path, polys_path)
     park_path = resolve_park_cache_path(nodes_path, polys_path, args.parks)
+    sport_path = resolve_sport_cache_path(nodes_path, polys_path, args.sports)
 
     for cat in CATS.keys():
         dedicated_score = None
@@ -810,6 +917,9 @@ def main():
         elif cat == "park":
             df, dedicated_score, _, _, _ = analyze_park(
                 con, park_path, lat, lon, args.radius, args.topn)
+        elif cat == "sport":
+            df, dedicated_score, _, _, _ = analyze_sport(
+                con, sport_path, lat, lon, args.radius, args.topn)
         else:
             df = query_category(con, nodes_path, polys_path, cat, lat, lon, args.radius, args.topn)
         label = CATS[cat]["label"]
@@ -918,7 +1028,8 @@ def main():
 def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_N,
             nodes_path="./cache/be_poi.parquet", polys_path="./cache/be_poi_poly.parquet",
             transit_stops_path=None, transit_summary_path=None,
-            rail_service_path=None, park_cache_path=None):
+            rail_service_path=None, park_cache_path=None,
+            sport_cache_path=None):
     # konum
     if address:
         lat, lon, disp = geocode(address)
@@ -943,6 +1054,9 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
     park_path = resolve_park_cache_path(
         nodes_path if nodes_ok else None, polys_path if polys_ok else None,
         park_cache_path)
+    sport_path = resolve_sport_cache_path(
+        nodes_path if nodes_ok else None, polys_path if polys_ok else None,
+        sport_cache_path)
 
     for cat in CATS.keys():
         dedicated_score = None
@@ -971,6 +1085,10 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
         elif cat == "park":
             df, dedicated_score, _, _, dedicated_components = analyze_park(
                 con, park_path, lat, lon, radius, topn)
+            breakdowns[cat] = dedicated_components
+        elif cat == "sport":
+            df, dedicated_score, _, _, dedicated_components = analyze_sport(
+                con, sport_path, lat, lon, radius, topn)
             breakdowns[cat] = dedicated_components
         else:
             df = query_category(con, nodes_path if nodes_ok else None,
@@ -1007,9 +1125,10 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
     if not big.empty:
         for _, r in big.iterrows():
             label = CATS[r["cat"]]["label"]
-            if r["cat"] == "park":
+            if r["cat"] in {"park", "sport"}:
                 row_name = next((value for value in (
-                    r.get("display_name"), r.get("name"), r.get("park_id"))
+                    r.get("display_name"), r.get("name"),
+                    r.get("park_id"), r.get("sport_id"))
                     if pd.notnull(value) and str(value).strip()), "Unnamed")
             else:
                 row_name = r["name"]
@@ -1054,9 +1173,10 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                 continue
             rows = []
             for _, r in sub.iterrows():
-                if cat == "park":
+                if cat in {"park", "sport"}:
                     row_name = next((value for value in (
-                        r.get("display_name"), r.get("name"), r.get("park_id"))
+                        r.get("display_name"), r.get("name"),
+                        r.get("park_id"), r.get("sport_id"))
                         if pd.notnull(value) and str(value).strip()), "Unnamed")
                 else:
                     row_name = r["name"]
@@ -1085,6 +1205,20 @@ def analyze(address=None, lat=None, lon=None, radius=DEFAULT_RADIUS_M, topn=TOP_
                                            else None),
                         "counts_as_primary": bool(r["counts_as_primary"]),
                         "counts_as_secondary": bool(r["counts_as_secondary"]),
+                    })
+                elif cat == "sport":
+                    item.update({
+                        "sport_id": r["sport_id"],
+                        "display_name": (r.get("display_name")
+                                         if pd.notnull(r.get("display_name"))
+                                         else None),
+                        "facility_class": r["facility_class"],
+                        "distance_m": float(r["d_lin"]),
+                        "distance_method": r["distance_method"],
+                        "score_eligible": bool(r["score_eligible"]),
+                        "sports": list(r["sports"]),
+                        "sport_count": int(r["sport_count"]),
+                        "access_class": r["access_class"],
                     })
                 rows.append(item)
             results_by_cat[cat] = rows

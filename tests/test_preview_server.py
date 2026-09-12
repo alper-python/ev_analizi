@@ -182,6 +182,10 @@ class RadiusReanalysisApiTests(unittest.TestCase):
                 server, "PARK_PATH",
                 str(Path(cls.demo_nodes).with_name(
                     "be_park_destinations.parquet"))),
+            patch.object(
+                server, "SPORT_PATH",
+                str(Path(cls.demo_nodes).with_name(
+                    "be_sport_destinations.parquet"))),
             patch.object(server, "DATA_MODE", "demo"),
         ]
         for active_patch in cls.patches:
@@ -307,6 +311,24 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         self.assertEqual(parks[0]["score"], breakdowns[0]["score_public"])
         self.assertEqual(parks[0]["items"][0]["park_class"], "park")
         self.assertNotIn("geometry_wkb", parks[0]["items"][0])
+
+    def test_sport_uses_canonical_cache_and_fixed_radius_breakdown(self):
+        sports = [next(category for category in self.analyze(radius)["categories"]
+                       if category["key"] == "sport")
+                  for radius in (1000, 2500, 5000)]
+        self.assertEqual([category["score"] for category in sports],
+                         [sports[0]["score"]] * 3)
+        self.assertEqual([category["count"] for category in sports], [1, 2, 2])
+        breakdowns = [category["score_breakdown"] for category in sports]
+        for field in ("score_precise", "score", "best", "choice"):
+            self.assertEqual([breakdown[field] for breakdown in breakdowns],
+                             [breakdowns[0][field]] * 3)
+        self.assertEqual(breakdowns[0]["scoring_radius_m"], 3000)
+        self.assertEqual(sports[0]["score"], breakdowns[0]["score"])
+        self.assertEqual(sports[0]["items"][0]["facility_class"],
+                         "fitness_gym")
+        self.assertEqual(sports[0]["items"][0]["sport_id"], "sport:demo:1")
+        self.assertNotIn("geometry_wkb", sports[0]["items"][0])
 
     def test_overall_uses_public_park_score_with_existing_weights(self):
         payload = self.analyze(2500)

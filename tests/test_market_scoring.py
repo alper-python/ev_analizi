@@ -247,9 +247,6 @@ class MarketDeduplicationTests(unittest.TestCase):
 
 class NonMarketRegressionTests(unittest.TestCase):
     def test_remaining_generic_configuration_and_formula_are_unchanged(self):
-        expected = {
-            "sport": {"D0": 1500, "w_prox": 5.0, "w_count": 5.0, "Nsat": 3},
-        }
         self.assertNotIn("market", app.SCORING)
         self.assertNotIn("market", app.SCORES)
         self.assertNotIn("school", app.SCORING)
@@ -257,19 +254,15 @@ class NonMarketRegressionTests(unittest.TestCase):
         self.assertNotIn("health", app.SCORING)
         self.assertNotIn("health", app.SCORES)
         self.assertNotIn("transit", app.SCORING)
-        for category, config in expected.items():
-            self.assertEqual(app.SCORING[category], config)
-            raw = (1 - min(300, config["D0"]) / config["D0"]) * config["w_prox"]
-            raw += min(2, config["Nsat"]) / config["Nsat"] * config["w_count"]
-            self.assertAlmostEqual(
-                app.calc_category_score(category, 2, 300),
-                min(10.0, raw),
-            )
+        self.assertNotIn("sport", app.SCORING)
+        self.assertNotIn("sport", app.SCORES)
 
         with self.assertRaisesRegex(ValueError, "Transit Score V1"):
             app.calc_category_score("transit", 2, 300)
         with self.assertRaisesRegex(ValueError, "Park Score V1"):
             app.calc_category_score("park", 2, 300)
+        with self.assertRaisesRegex(ValueError, "Sport Score V1"):
+            app.calc_category_score("sport", 2, 300)
 
     def test_generic_market_calls_fail_explicitly(self):
         message = "dedicated"

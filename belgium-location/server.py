@@ -19,7 +19,7 @@ from shapely.geometry import Point
 
 from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
                         analyze_health, analyze_market, analyze_park,
-                        analyze_school, geocode,
+                        analyze_school, analyze_sport, geocode,
                         query_category, query_market_candidates,
                         query_school_candidates)
 from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
@@ -183,6 +183,7 @@ def _create_demo_caches():
     target = Path(temp_dir.name)
     nodes_path, polys_path = target / "nodes.parquet", target / "polys.parquet"
     parks_path = target / "be_park_destinations.parquet"
+    sports_path = target / "be_sport_destinations.parquet"
     nodes = [
         _node(1, "market", "Delhaize Demo", 300, 20, shop="supermarket"),
         _node(2, "market", "Carrefour Express Demo", 100, 120, shop="convenience"),
@@ -228,17 +229,54 @@ def _create_demo_caches():
         "bbox_min_lat": min_lat, "bbox_min_lon": min_lon,
         "bbox_max_lat": max_lat, "bbox_max_lon": max_lon,
     }]), parks_path)
+    sport_rows = []
+    for sport_id, name, distance, bearing, facility_class in (
+            ("sport:demo:1", "Demo Fitness", 700, 190, "fitness_gym"),
+            ("sport:demo:2", "Demo Sports Centre", 1300, 240,
+             "general_sports_centre")):
+        sport_lat, sport_lon = _offset(distance, bearing)
+        geometry = Point(sport_lon, sport_lat)
+        min_lon, min_lat, max_lon, max_lat = geometry.bounds
+        sport_rows.append({
+            "sport_id": sport_id, "canonical_osm_type": "node",
+            "canonical_osm_id": int(sport_id.rsplit(":", 1)[1]),
+            "name": name, "display_name": name,
+            "display_name_source": "canonical_name",
+            "facility_class": facility_class, "score_eligible": True,
+            "eligibility_reason": "eligible", "specialized": False,
+            "standalone": False, "sports": [], "direct_sports": [],
+            "component_sports": [], "sport_count": 0,
+            "component_count": 0, "access_raw": None,
+            "access_class": "missing", "access_evidence": "demo",
+            "fee": None, "membership": None, "operator": None,
+            "opening_hours": None, "club": None,
+            "is_commercial": facility_class == "fitness_gym",
+            "is_public_operator": False, "is_school_context": False,
+            "indoor": None, "covered": None, "building": None,
+            "wikidata": None, "wikipedia": None,
+            "geometry_wkb": geometry.wkb,
+            "representative_lat": sport_lat,
+            "representative_lon": sport_lon,
+            "entrance_lat": None, "entrance_lon": None,
+            "entrance_osm_key": None,
+            "bbox_min_lat": min_lat, "bbox_min_lon": min_lon,
+            "bbox_max_lat": max_lat, "bbox_max_lon": max_lon,
+            "canonicalization_method": "canonical_source",
+        })
+    pq.write_table(pa.Table.from_pylist(sport_rows), sports_path)
     return temp_dir, str(nodes_path), str(polys_path)
 
 
 NODES_PATH = _existing_cache("POI_NODES", "be_poi.parquet")
 POLYS_PATH = _existing_cache("POI_POLYS", "be_poi_poly.parquet")
 PARK_PATH = _existing_cache("PARK_DESTINATIONS", "be_park_destinations.parquet")
+SPORT_PATH = _existing_cache("SPORT_DESTINATIONS", "be_sport_destinations.parquet")
 DATA_MODE = "real" if (NODES_PATH or POLYS_PATH) else "demo"
 _demo_dir = None
 if DATA_MODE == "demo":
     _demo_dir, NODES_PATH, POLYS_PATH = _create_demo_caches()
     PARK_PATH = str(Path(NODES_PATH).with_name("be_park_destinations.parquet"))
+    SPORT_PATH = str(Path(NODES_PATH).with_name("be_sport_destinations.parquet"))
     atexit.register(_demo_dir.cleanup)
 
 
@@ -335,6 +373,10 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
         frame, _park_score, count, nearest, _components = analyze_park(
             con, PARK_PATH, lat, lon, radius, topn)
         score_breakdown = dedicated_breakdown
+    elif category == "sport":
+        frame, _sport_score, count, nearest, _components = analyze_sport(
+            con, SPORT_PATH, lat, lon, radius, topn)
+        score_breakdown = dedicated_breakdown
     else:
         frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0
@@ -348,7 +390,10 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
                          if _value(row.get(column))), None)
         if category == "park":
             poi_type = _value(row.get("park_class"))
-        item_name = (_value(row.get("display_name")) if category == "park"
+        elif category == "sport":
+            poi_type = _value(row.get("facility_class"))
+        item_name = (_value(row.get("display_name"))
+                     if category in {"park", "sport"}
                      else None)
         item = {
             "name": item_name or _value(row["name"]) or _value(row["brand"]) or "Unnamed",
@@ -372,6 +417,18 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
                 "counts_as_primary": bool(row.get("counts_as_primary")),
                 "counts_as_secondary": bool(row.get("counts_as_secondary")),
             })
+        elif category == "sport":
+            item.update({
+                "sport_id": _value(row.get("sport_id")),
+                "display_name": _value(row.get("display_name")),
+                "facility_class": _value(row.get("facility_class")),
+                "distance_m": float(row["d_lin"]),
+                "distance_method": _value(row.get("distance_method")),
+                "score_eligible": bool(row.get("score_eligible")),
+                "sports": list(row.get("sports")),
+                "sport_count": int(row.get("sport_count") or 0),
+                "access_class": _value(row.get("access_class")),
+            })
         items.append(item)
     return {"key": category, "score": score, "count": count,
             "nearest_m": int(round(nearest)) if nearest is not None else None,
@@ -389,13 +446,15 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
 
     result = analyze_location(lat=lat, lon=lon, radius=radius, topn=topn,
                               nodes_path=NODES_PATH, polys_path=POLYS_PATH,
-                              park_cache_path=PARK_PATH)
+                              park_cache_path=PARK_PATH,
+                              sport_cache_path=SPORT_PATH)
     with duckdb.connect() as con:
         categories = [
             _category_payload(con, category, lat, lon, radius, topn,
                               result["scores"][CATS[category]["label"]],
                               result.get("breakdowns", {}).get(category)
-                              if category in {"transit", "park"} else None)
+                              if category in {"transit", "park", "sport"}
+                              else None)
             for category in CATS
         ]
     payload = {"display_address": display_address, "lat": lat, "lon": lon,
@@ -411,7 +470,7 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
 def health():
     return jsonify({"status": "ok", "data_mode": DATA_MODE,
                     "cache": {"nodes": NODES_PATH, "polys": POLYS_PATH,
-                              "parks": PARK_PATH}})
+                              "parks": PARK_PATH, "sports": SPORT_PATH}})
 
 
 @app.get("/api/address-suggestions")
@@ -481,4 +540,5 @@ if __name__ == "__main__":
     print(f"[preview] nodes: {NODES_PATH}")
     print(f"[preview] polygons: {POLYS_PATH}")
     print(f"[preview] parks: {PARK_PATH}")
+    print(f"[preview] sports: {SPORT_PATH}")
     app.run(host="127.0.0.1", port=5000, debug=False)
