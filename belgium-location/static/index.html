@@ -176,6 +176,75 @@
                 font: 600 11.5px/1.4 Manrope
             }
             .poi-distance { display: inline-flex; align-items: center; gap: 4px }
+            .provider-credit {
+                margin-top: 7px;
+                text-align: left;
+                font: 600 10.5px Manrope;
+                color: var(--muted)
+            }
+            .provider-credit a { color: inherit }
+            .tile-background-warning {
+                position: absolute;
+                z-index: 900;
+                left: 12px;
+                right: 12px;
+                bottom: 34px;
+                display: flex;
+                justify-content: center;
+                pointer-events: none
+            }
+            .tile-background-warning > div {
+                max-width: 560px;
+                padding: 8px 11px;
+                border: 1px solid rgba(214, 69, 69, .35);
+                border-radius: 9px;
+                background: color-mix(in srgb, var(--surface) 94%, transparent);
+                box-shadow: var(--shadow);
+                color: var(--ink);
+                font: 700 11px/1.4 Manrope;
+                text-align: center
+            }
+            .data-sources-backdrop {
+                position: fixed;
+                inset: 0;
+                z-index: 2200;
+                display: grid;
+                place-items: center;
+                padding: 12px;
+                box-sizing: border-box;
+                background: rgba(17, 20, 27, .48)
+            }
+            .data-sources-dialog {
+                width: min(520px, calc(100vw - 24px));
+                max-height: calc(100vh - 24px);
+                box-sizing: border-box;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding: 18px;
+                border: 1px solid var(--line);
+                border-radius: 14px;
+                background: var(--surface);
+                box-shadow: 0 18px 55px rgba(20, 30, 48, .28)
+            }
+            .data-source-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px 14px;
+                margin: 12px 0;
+                font: 700 12px/1.45 Manrope
+            }
+            .data-source-operators {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 9px
+            }
+            .data-source-operators span {
+                padding: 5px 8px;
+                border-radius: 999px;
+                background: var(--chip);
+                font: 700 10.5px Manrope
+            }
 
             @media (max-width: 1199px) {
                 .analysis-layout {
@@ -223,6 +292,8 @@
                     max-height: 72vh;
                     transform: translateY(-50%)
                 }
+                .tile-background-warning { bottom: 48px }
+                .leaflet-control-attribution { max-width: calc(100vw - 24px); font-size: 9px }
             }
         </style>
     </helmet>
@@ -280,6 +351,9 @@
                                     style="flex:1 0 auto;padding:14px 24px;min-height:44px;border-radius:11px;border:none;background:#2E6FDB;color:#fff;font:700 15px Manrope;cursor:pointer"
                                     style-hover="background:#1e56b8">{{ t.analyze }}
                             </button>
+                        </div>
+                        <div class="provider-credit">
+                            <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Powered by Geoapify</a>
                         </div>
                         <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}">
                             <div style="color:#D64545;font:600 12.5px Manrope;margin-top:9px">{{ formError }}</div>
@@ -344,8 +418,11 @@
                         </div>
                     </div>
                 </div>
-                <div style="text-align:center;padding:26px 20px;color:var(--muted);font:500 12px Manrope">{{ t.footer }}
-                    · <a href="#" onClick="{{ openStyle }}">{{ t.styleGuide }}</a></div>
+                <div style="text-align:center;padding:26px 20px;color:var(--muted);font:500 12px Manrope">
+                    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{{ t.osmContributors }}</a>
+                    · <a href="#" onClick="{{ openDataSources }}">{{ t.dataSources }}</a>
+                    · <a href="#" onClick="{{ openStyle }}">{{ t.styleGuide }}</a>
+                </div>
             </div>
         </sc-if>
 
@@ -364,6 +441,11 @@
                         <div style="font:600 11.5px Manrope;color:var(--muted)">{{ metaLine }}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <button onClick="{{ openDataSources }}"
+                                title="{{ t.dataSources }}" aria-label="{{ t.dataSources }}"
+                                style="flex:none;padding:9px 12px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12px Manrope;cursor:pointer"
+                                style-hover="background:var(--chip)">ⓘ {{ t.dataSources }}
+                        </button>
                         <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
                             <button onClick="{{ onPrint }}"
                                     style="flex:none;padding:9px 14px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 12.5px Manrope;cursor:pointer"
@@ -427,6 +509,11 @@
                                         </button>
                                     </sc-for>
                                 </div>
+                                <sc-if value="{{ tileWarning }}" hint-placeholder-val="{{ false }}">
+                                    <div class="tile-background-warning" role="status" aria-live="polite">
+                                        <div>{{ t.tileUnavailable }}</div>
+                                    </div>
+                                </sc-if>
                             </sc-if>
                             <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
                                 <div style="position:absolute;inset:0;background:linear-gradient(100deg,var(--chip) 30%,var(--surface) 50%,var(--chip) 70%);background-size:1200px 100%;animation:shimmer 1.6s linear infinite"></div>
@@ -889,6 +976,32 @@
             </div>
         </sc-if>
 
+        <sc-if value="{{ dataSourcesOpen }}" hint-placeholder-val="{{ false }}">
+            <div class="data-sources-backdrop" onClick="{{ closeDataSources }}">
+                <div class="data-sources-dialog" role="dialog" aria-modal="true" aria-label="{{ t.dataSources }}"
+                     onClick="{{ keepDataSourcesOpen }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                        <div style="font:800 17px Manrope">{{ t.dataSources }}</div>
+                        <button onClick="{{ closeDataSources }}" aria-label="{{ t.close }}"
+                                style="width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:800 17px Manrope;cursor:pointer">×</button>
+                    </div>
+                    <p style="margin:10px 0;color:var(--muted);font:500 12px/1.55 Manrope">{{ t.dataSourcesIntro }}</p>
+                    <div class="data-source-links">
+                        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>
+                        <a href="https://stadiamaps.com/attribution/" target="_blank" rel="noopener noreferrer">Stadia Maps</a>
+                        <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>
+                        <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a>
+                        <a href="https://data.belgianmobility.io/" target="_blank" rel="noopener noreferrer">Belgian Mobility</a>
+                    </div>
+                    <p style="margin:0;color:var(--muted);font:500 12px/1.55 Manrope">{{ t.transitDataSource }}</p>
+                    <div class="data-source-operators" aria-label="{{ t.transitOperators }}">
+                        <span>De Lijn</span><span>STIB/MIVB</span><span>TEC</span><span>SNCB/NMBS</span>
+                    </div>
+                    <p style="margin:13px 0 0;color:var(--muted);font:500 11px/1.5 Manrope">{{ t.thirdPartyTiles }}</p>
+                </div>
+            </div>
+        </sc-if>
+
     </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script
@@ -897,6 +1010,7 @@
       constructor(props) {
         super(props);
         this.mapEl = null; this.map = null; this.tiles = null; this.tileTheme = null;
+        this.tileGeneration = 0; this.tileErrorShown = false;
         this.groups = {}; this.mk = {};
         let theme = 'light', lang = 'tr';
         try {
@@ -910,6 +1024,7 @@
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
           selectedCoords: null, calculationPopover: null, radiusInfoOpen: false, overallInfoOpen: false,
+          tileWarning: false, dataSourcesOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -920,8 +1035,8 @@
           }
         };
         this.onDocumentKeyDown = event => {
-          if (event && event.key === 'Escape' && this.state.calculationPopover) {
-            this.setState({ calculationPopover: null });
+          if (event && event.key === 'Escape' && (this.state.calculationPopover || this.state.dataSourcesOpen)) {
+            this.setState({ calculationPopover: null, dataSourcesOpen: false });
           }
         };
         this.onResize = () => {
@@ -946,6 +1061,12 @@
             vp2t: 'Tahmini mesafe ve süre', vp2d: 'Tahminler kuş uçuşu mesafeden türetilir; gerçek bir rota planlaması değildir.',
             vp3t: 'Haritada keşfet', vp3d: 'Tüm noktaları interaktif haritada kategoriye göre filtreleyerek inceleyin.',
             footer: 'Veriler © OpenStreetMap katkıda bulunanları', styleGuide: 'Stil rehberi',
+            osmContributors: 'OpenStreetMap katkıda bulunanları', dataSources: 'Veri kaynakları', close: 'Kapat',
+            dataSourcesIntro: 'Harita, adres ve toplu taşıma bilgileri aşağıdaki kaynaklardan sağlanır.',
+            transitDataSource: 'Toplu taşıma bilgileri, Belgian Mobility üzerinden sağlanan GTFS ve açık veri akışlarına dayanır.',
+            transitOperators: 'Toplu taşıma işletmecileri',
+            thirdPartyTiles: 'Harita arka planı üçüncü taraf Stadia Maps hizmetinden yüklenir.',
+            tileUnavailable: 'Harita arka planı şu anda kullanılamıyor. Skorlar ve sonuç listeleri kullanılmaya devam edebilir.',
             themeDark: 'Koyu tema', themeLight: 'Açık tema', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
             analyzing: 'Çevre analiz ediliyor…', overall: 'Yakın Çevre Erişim Skoru', overallSubtitle: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
             overallScope: 'Bu skor, yakın çevredeki ölçülen günlük hizmetlere erişimi özetler. Düşük bir skor, konumun yaşamak için kötü olduğu anlamına gelmez.',
@@ -1053,6 +1174,12 @@
             vp2t: 'Estimated distance and time', vp2d: 'Estimates are derived from straight-line distance and are not route planning.',
             vp3t: 'Explore on the map', vp3d: 'Filter every point by category on an interactive map.',
             footer: 'Data © OpenStreetMap contributors', styleGuide: 'Style guide',
+            osmContributors: 'OpenStreetMap contributors', dataSources: 'Data sources', close: 'Close',
+            dataSourcesIntro: 'Map, address, and public transport information is provided by the following sources.',
+            transitDataSource: 'Public transport information is based on GTFS and open-data feeds provided through Belgian Mobility.',
+            transitOperators: 'Public transport operators',
+            thirdPartyTiles: 'The map background is loaded from the third-party Stadia Maps service.',
+            tileUnavailable: 'The map background is currently unavailable. Scores and result lists remain available.',
             themeDark: 'Dark theme', themeLight: 'Light theme', newSearch: '← New search', print: 'Share / print report',
             analyzing: 'Analyzing the area…', overall: 'Nearby Access Score', overallSubtitle: 'Access to nearby everyday amenities and services',
             overallScope: 'This score summarizes access to measured everyday amenities and services nearby. A low score does not mean the location is a bad place to live.',
@@ -1160,6 +1287,12 @@
             vp2t: 'Geschatte afstand en reistijd', vp2d: 'De schattingen zijn afgeleid van de hemelsbrede afstand en zijn geen routeplanning.',
             vp3t: 'Verken op de kaart', vp3d: 'Filter alle punten per categorie op een interactieve kaart.',
             footer: 'Data © OpenStreetMap-bijdragers', styleGuide: 'Stijlgids',
+            osmContributors: 'OpenStreetMap-bijdragers', dataSources: 'Gegevensbronnen', close: 'Sluiten',
+            dataSourcesIntro: 'Kaart-, adres- en openbaarvervoersinformatie wordt geleverd door de volgende bronnen.',
+            transitDataSource: 'Informatie over het openbaar vervoer is gebaseerd op GTFS- en opendatafeeds die via Belgian Mobility worden aangeboden.',
+            transitOperators: 'Openbaarvervoermaatschappijen',
+            thirdPartyTiles: 'De kaartachtergrond wordt geladen via de externe dienst Stadia Maps.',
+            tileUnavailable: 'De kaartachtergrond is momenteel niet beschikbaar. Scores en resultaten blijven bruikbaar.',
             themeDark: 'Donker thema', themeLight: 'Licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
             analyzing: 'Omgeving wordt geanalyseerd…', overall: 'Nabijheids- en voorzieningenscore', overallSubtitle: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
             overallScope: 'Deze score vat de toegang tot gemeten dagelijkse voorzieningen en diensten in de buurt samen. Een lage score betekent niet dat de locatie een slechte plek is om te wonen.',
@@ -1654,10 +1787,25 @@
         if (!this.map || !window.L) return;
         if (this.tiles) this.map.removeLayer(this.tiles);
         const dark = this.state.theme === 'dark';
-        this.tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/' + (dark ? 'dark_all' : 'light_all') + '/{z}/{x}/{y}{r}.png',
-          { attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19 }).addTo(this.map);
-        this.tiles.bringToBack();
+        const tileUrl = dark
+          ? 'https://tiles-eu.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png'
+          : 'https://tiles-eu.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png';
+        const generation = ++this.tileGeneration;
+        this.tileErrorShown = false;
         this.tileTheme = this.state.theme;
+        if (this.state.tileWarning) this.setState({ tileWarning: false });
+        // Stadia raster tiles use domain authentication in production; no client-visible key is required.
+        this.tiles = L.tileLayer(tileUrl, {
+          attribution: '&copy; <a href="https://stadiamaps.com/attribution/" target="_blank" rel="noopener noreferrer">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+          maxZoom: 20
+        });
+        this.tiles.on('tileerror', () => {
+          if (generation !== this.tileGeneration || this.tileErrorShown) return;
+          this.tileErrorShown = true;
+          this.setState({ tileWarning: true });
+        });
+        this.tiles.addTo(this.map);
+        this.tiles.bringToBack();
       }
 
       renderVals() {
@@ -1909,8 +2057,13 @@
           toggleRadiusInfo: () => this.setState({ radiusInfoOpen: !this.state.radiusInfoOpen }),
           overallInfoOpen: S.overallInfoOpen,
           toggleOverallInfo: () => this.setState({ overallInfoOpen: !this.state.overallInfoOpen }),
+          tileWarning: S.tileWarning,
+          dataSourcesOpen: S.dataSourcesOpen,
+          openDataSources: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ dataSourcesOpen: true }); },
+          closeDataSources: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ dataSourcesOpen: false }); },
+          keepDataSourcesOpen: e => { if (e && e.stopPropagation) e.stopPropagation(); },
           openStyle: e => { e.preventDefault(); this.setState({ view: 'style' }); },
-          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false, overallInfoOpen: false, calculationPopover: null }),
+          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false, overallInfoOpen: false, calculationPopover: null, dataSourcesOpen: false }),
           onPrint: () => window.print(),
           retry: () => this.doSearch(S.address || this.DEF_ADDR()),
           retryBigger: () => this.doSearch(S.address || this.DEF_ADDR(), 5000),

@@ -1355,6 +1355,110 @@ class SportFrontendContentTests(unittest.TestCase):
             self.assertIn(text, self.frontend)
 
 
+class BasemapAttributionContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_active_frontend_uses_exact_stadia_eu_layers(self):
+        self.assertIn(
+            "https://tiles-eu.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png",
+            self.frontend,
+        )
+        self.assertIn(
+            "https://tiles-eu.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png",
+            self.frontend,
+        )
+        self.assertIn("maxZoom: 20", self.frontend)
+        for stale_value in ("cartocdn.com", "light_all", "dark_all", "CARTO"):
+            self.assertNotIn(stale_value, self.frontend)
+
+    def test_stadia_layers_do_not_embed_a_client_api_key(self):
+        tile_code = self.frontend[
+            self.frontend.index("addTiles() {"):
+            self.frontend.index("renderVals() {")
+        ]
+        for unsafe_value in ("?key=", "api_key", "apiKey", "STADIA_API_KEY"):
+            self.assertNotIn(unsafe_value, tile_code)
+        self.assertIn("domain authentication in production", tile_code)
+
+    def test_leaflet_attribution_links_all_required_providers(self):
+        attribution = (
+            '&copy; <a href="https://stadiamaps.com/attribution/" '
+            'target="_blank" rel="noopener noreferrer">Stadia Maps</a> &copy; <a '
+            'href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> '
+            '&copy; <a href="https://www.openstreetmap.org/copyright" '
+            'target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
+        )
+        self.assertIn(attribution, self.frontend)
+        self.assertIn("L.map(this.mapEl, { zoomControl: true })", self.frontend)
+
+    def test_theme_switch_replaces_only_the_tile_layer(self):
+        self.assertIn("if (this.tiles) this.map.removeLayer(this.tiles)",
+                      self.frontend)
+        self.assertIn("const dark = this.state.theme === 'dark'", self.frontend)
+        self.assertIn("this.tiles.addTo(this.map)", self.frontend)
+        self.assertIn("this.tiles.bringToBack()", self.frontend)
+        self.assertIn("if (this.map && this.tileTheme !== this.state.theme) this.addTiles()",
+                      self.frontend)
+
+    def test_tile_failure_is_localized_and_non_blocking(self):
+        for message in (
+            "Harita arka planı şu anda kullanılamıyor. Skorlar ve sonuç listeleri kullanılmaya devam edebilir.",
+            "The map background is currently unavailable. Scores and result lists remain available.",
+            "De kaartachtergrond is momenteel niet beschikbaar. Scores en resultaten blijven bruikbaar.",
+        ):
+            self.assertIn(message, self.frontend)
+        self.assertIn("this.tiles.on('tileerror'", self.frontend)
+        self.assertIn("if (generation !== this.tileGeneration || this.tileErrorShown) return",
+                      self.frontend)
+        handler = self.frontend[
+            self.frontend.index("this.tiles.on('tileerror'"):
+            self.frontend.index("this.tiles.addTo(this.map)")
+        ]
+        self.assertIn("this.setState({ tileWarning: true })", handler)
+        for scoring_state in ("data:", "overall:", "categories:", "status:"):
+            self.assertNotIn(scoring_state, handler)
+
+    def test_geoapify_credit_is_linked_near_the_address_input(self):
+        address_input = self.frontend.index('aria-autocomplete="list"')
+        credit = self.frontend.index("Powered by Geoapify")
+        radius_controls = self.frontend.index('value="{{ formError }}"', address_input)
+        self.assertLess(address_input, credit)
+        self.assertLess(credit, radius_controls)
+        self.assertIn(
+            '<a href="https://www.geoapify.com/" target="_blank" '
+            'rel="noopener noreferrer">Powered by Geoapify</a>',
+            self.frontend,
+        )
+
+    def test_data_sources_are_localized_and_credit_transit_operators(self):
+        for label in ("Veri kaynakları", "Data sources", "Gegevensbronnen"):
+            self.assertIn(label, self.frontend)
+        for provider in (
+            "OpenStreetMap contributors", "Stadia Maps", "OpenMapTiles",
+            "Geoapify", "Belgian Mobility", "De Lijn", "STIB/MIVB", "TEC",
+            "SNCB/NMBS",
+        ):
+            self.assertIn(provider, self.frontend)
+        for feed_wording in (
+            "GTFS ve açık veri akışlarına",
+            "GTFS and open-data feeds",
+            "GTFS- en opendatafeeds",
+        ):
+            self.assertIn(feed_wording, self.frontend)
+        self.assertNotRegex(self.frontend, r"GTFS.{0,80}20\d{2}")
+
+    def test_sources_modal_and_warning_have_responsive_overflow_guards(self):
+        self.assertIn("width: min(520px, calc(100vw - 24px))", self.frontend)
+        self.assertIn("overflow-x: hidden", self.frontend)
+        self.assertIn(".leaflet-control-attribution { max-width: calc(100vw - 24px)",
+                      self.frontend)
+        self.assertIn("The map background is loaded from the third-party Stadia Maps service.",
+                      self.frontend)
+
+
 class NearbyAccessSemanticsContentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
