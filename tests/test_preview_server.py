@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import math
 import sys
 import unittest
 from unittest.mock import patch
@@ -169,6 +171,243 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         self.assertEqual(payload["suggestions"], [])
         self.assertNotIn(secret, response.get_data(as_text=True))
         self.assertNotIn(secret, "\n".join(logs.output))
+
+    def test_unexpected_provider_failure_returns_safe_json(self):
+        provider = FakeProvider()
+        provider.suggest = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("private upstream detail"))
+        with (patch.object(server, "ADDRESS_PROVIDER", provider),
+              self.assertLogs(server.LOGGER, level="ERROR")):
+            response = self.client.get(
+                "/api/address-suggestions?q=Gijmelstraat&lang=en")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.content_type, "application/json")
+        self.assertEqual(response.get_json(), {
+            "error": {
+                "code": "internal_error",
+                "message": "Address suggestions are temporarily unavailable.",
+            }
+        })
+        self.assertNotIn("private upstream detail", response.get_data(as_text=True))
+
+
+class AnalyzeValidationApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = server.app.test_client()
+
+    def assert_json_error(self, response, status=400, code="invalid_request"):
+        self.assertEqual(response.status_code, status)
+        self.assertEqual(response.content_type, "application/json")
+        payload = response.get_json()
+        self.assertEqual(payload["error"]["code"], code)
+        self.assertIsInstance(payload["error"]["message"], str)
+        self.assertNotIn("<html", response.get_data(as_text=True).lower())
+        return payload
+
+    def post_raw(self, value):
+        return self.client.post(
+            "/api/analyze", data=value, content_type="application/json")
+
+    def valid_payload(self, **updates):
+        payload = {
+            "address": "Selected Belgian address",
+            "lat": 51.0034977,
+            "lon": 4.8405107,
+            "radius": 2500,
+            "topn": 20,
+            "lang": "en",
+        }
+        payload.update(updates)
+        return payload
+
+    def test_json_root_must_be_an_object(self):
+        for value in ([], [1], "text", 123, True, False, None):
+            with self.subTest(value=value):
+                response = self.post_raw(json.dumps(value))
+                self.assert_json_error(response)
+
+    def test_object_without_address_or_coordinates_is_rejected(self):
+        self.assert_json_error(self.client.post("/api/analyze", json={}))
+
+    def test_malformed_json_returns_controlled_error(self):
+        self.assert_json_error(self.post_raw('{"lat":'))
+
+    def test_coordinate_booleans_and_non_numeric_values_are_rejected(self):
+        for field in ("lat", "lon"):
+            for value in (True, False, "not-a-number"):
+                with self.subTest(field=field, value=value):
+                    response = self.client.post(
+                        "/api/analyze", json=self.valid_payload(**{field: value}))
+                    self.assert_json_error(response)
+
+    def test_non_finite_coordinates_are_rejected(self):
+        for field in ("lat", "lon"):
+            for value in (math.nan, math.inf, -math.inf):
+                with self.subTest(field=field, value=value):
+                    response = self.client.post(
+                        "/api/analyze", json=self.valid_payload(**{field: value}))
+                    self.assert_json_error(response)
+
+    def test_coordinate_boundaries_and_numeric_strings_are_accepted(self):
+        cases = ((90, 180), (-90, -180), ("51.0034977", "4.8405107"))
+        result = {"categories": [], "overall": 0.0}
+        with patch.object(server, "_run_preview_analysis", return_value=result):
+            for lat, lon in cases:
+                with self.subTest(lat=lat, lon=lon):
+                    response = self.client.post(
+                        "/api/analyze", json=self.valid_payload(lat=lat, lon=lon))
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.content_type, "application/json")
+
+    def test_out_of_range_coordinates_are_rejected(self):
+        cases = (
+            {"lat": 90.0001}, {"lat": -90.0001}, {"lat": 999},
+            {"lon": 180.0001}, {"lon": -180.0001}, {"lon": 999},
+        )
+        for update in cases:
+            with self.subTest(update=update):
+                response = self.client.post(
+                    "/api/analyze", json=self.valid_payload(**update))
+                self.assert_json_error(response)
+
+    def test_partial_coordinate_pair_is_rejected_even_with_address(self):
+        for payload in (
+            {"address": "Leuven", "lat": 50.88},
+            {"address": "Leuven", "lon": 4.70},
+            {"lat": 50.88},
+            {"lon": 4.70},
+        ):
+            with self.subTest(payload=payload):
+                self.assert_json_error(
+                    self.client.post("/api/analyze", json=payload))
+
+    def test_address_must_be_a_non_blank_bounded_string(self):
+        for address in ({"street": "Gijmelstraat"}, ["Gijmelstraat"], "", "   "):
+            with self.subTest(address=address):
+                response = self.client.post(
+                    "/api/analyze", json={"address": address})
+                self.assert_json_error(response)
+        response = self.client.post(
+            "/api/analyze", json={"address": "x" * (server.MAX_ADDRESS_LENGTH + 1)})
+        self.assert_json_error(response)
+
+    def test_address_at_max_length_and_coordinates_is_accepted(self):
+        result = {"categories": [], "overall": 0.0}
+        with patch.object(server, "_run_preview_analysis", return_value=result):
+            response = self.client.post(
+                "/api/analyze",
+                json=self.valid_payload(address="x" * server.MAX_ADDRESS_LENGTH))
+        self.assertEqual(response.status_code, 200)
+
+    def test_valid_address_string_is_geocoded_and_accepted(self):
+        result = {"categories": [], "overall": 0.0}
+        with (patch.object(server, "DATA_MODE", "real"),
+              patch.object(server, "geocode",
+                           return_value=(50.8795, 4.7023, "Leuven, Belgium")),
+              patch.object(server, "_run_preview_analysis",
+                           return_value=result) as analysis):
+            response = self.client.post(
+                "/api/analyze", json={"address": "  Leuven  "})
+        self.assertEqual(response.status_code, 200)
+        analysis.assert_called_once_with(
+            50.8795, 4.7023, "Leuven, Belgium",
+            server.DEFAULT_RADIUS_M, server.TOP_N, "tr")
+
+    def test_address_not_found_has_a_distinct_json_error(self):
+        with (patch.object(server, "DATA_MODE", "real"),
+              patch.object(server, "geocode",
+                           side_effect=RuntimeError("not found"))):
+            response = self.client.post(
+                "/api/analyze", json={"address": "Missing Belgian address"})
+        payload = self.assert_json_error(
+            response, status=400, code="address_not_found")
+        self.assertEqual(payload["error"]["message"],
+                         "Address could not be geocoded.")
+
+    def test_unexpected_geocoder_failure_uses_generic_json_500(self):
+        private_detail = "private geocoder implementation detail"
+        with (patch.object(server, "DATA_MODE", "real"),
+              patch.object(server, "geocode",
+                           side_effect=ValueError(private_detail)),
+              self.assertLogs(server.LOGGER, level="ERROR")):
+            response = self.client.post(
+                "/api/analyze", json={"address": "Leuven"})
+        self.assert_json_error(response, status=500, code="internal_error")
+        self.assertNotIn(private_detail, response.get_data(as_text=True))
+
+    def test_invalid_radius_language_and_topn_are_json_errors(self):
+        for update in (
+            {"radius": 1200}, {"radius": True},
+            {"lang": "fr"}, {"lang": True},
+            {"topn": 0}, {"topn": 21}, {"topn": True}, {"topn": 1.5},
+        ):
+            with self.subTest(update=update):
+                response = self.client.post(
+                    "/api/analyze", json=self.valid_payload(**update))
+                self.assert_json_error(response)
+
+    def test_unexpected_analysis_failure_returns_generic_json(self):
+        private_detail = "C:\\private\\cache\\secret.parquet"
+        with (patch.object(server, "_run_preview_analysis",
+                           side_effect=RuntimeError(private_detail)),
+              self.assertLogs(server.LOGGER, level="ERROR")):
+            response = self.client.post(
+                "/api/analyze", json=self.valid_payload())
+        payload = self.assert_json_error(response, status=500, code="internal_error")
+        body = response.get_data(as_text=True)
+        self.assertEqual(payload["error"]["message"],
+                         "The analysis could not be completed.")
+        self.assertNotIn(private_detail, body)
+        self.assertNotIn("Traceback", body)
+
+    def test_missing_analysis_data_returns_json_503(self):
+        with (patch.object(server, "_run_preview_analysis",
+                           side_effect=FileNotFoundError("private cache path")),
+              self.assertLogs(server.LOGGER, level="ERROR")):
+            response = self.client.post(
+                "/api/analyze", json=self.valid_payload())
+        self.assert_json_error(
+            response, status=503, code="service_unavailable")
+
+
+class PopupSecurityContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_home_address_popup_uses_text_content(self):
+        self.assertIn("bindPopup(this.homePopupContent(d.display_address, t))",
+                      self.frontend)
+        self.assertIn("title.textContent = String(address == null ? '' : address)",
+                      self.frontend)
+        self.assertNotIn("'<b>' + d.display_address", self.frontend)
+
+    def test_poi_popup_uses_text_content_for_names_and_types(self):
+        self.assertIn(
+            "bindPopup(this.poiPopupContent(markerName, markerType, straight, it, t))",
+            self.frontend,
+        )
+        self.assertIn("title.textContent = String(name == null ? '' : name)",
+                      self.frontend)
+        self.assertIn("if (type) this.appendPopupLine(wrapper, type)",
+                      self.frontend)
+        self.assertIn("line.textContent = String(value == null ? '' : value)",
+                      self.frontend)
+        self.assertNotIn("'<b>' + markerName", self.frontend)
+
+    def test_hostile_markup_has_no_raw_popup_interpolation_path(self):
+        hostile_values = ("<b>Injected</b>", "<img src=x onerror=alert(1)>")
+        for hostile in hostile_values:
+            with self.subTest(hostile=hostile):
+                self.assertNotIn("bindPopup('" + hostile, self.frontend)
+        popup_start = self.frontend.index("appendPopupLine(wrapper, value)")
+        popup_end = self.frontend.index("addTiles()", popup_start)
+        popup_helpers = self.frontend[popup_start:popup_end]
+        self.assertNotIn("innerHTML", popup_helpers)
+        self.assertNotIn("insertAdjacentHTML", popup_helpers)
+        self.assertNotIn("outerHTML", popup_helpers)
 
 
 class RadiusReanalysisApiTests(unittest.TestCase):

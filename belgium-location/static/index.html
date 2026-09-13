@@ -1603,7 +1603,7 @@
         this.addTiles();
         const circle = L.circle(c, { radius: d.radius, color: '#2E6FDB', weight: 1.5, dashArray: '4 6', fillColor: '#2E6FDB', fillOpacity: 0.05 }).addTo(this.map);
         L.marker(c, { icon: L.divIcon({ className: '', iconSize: [38, 38], iconAnchor: [19, 19], html: '<div style="width:38px;height:38px;border-radius:50%;background:#1c2430;border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.35);display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg></div>' }) })
-          .addTo(this.map).bindPopup('<b>' + d.display_address + '</b><br>' + t.searched);
+          .addTo(this.map).bindPopup(this.homePopupContent(d.display_address, t));
         this.mk = {}; this.groups = {};
         d.categories.forEach(cat => {
           const g = L.layerGroup(); this.mk[cat.key] = [];
@@ -1611,15 +1611,43 @@
           visibleItems.forEach((it, i) => {
             const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
             const markerName = cat.key === 'park' ? this.parkName(it, t) : (cat.key === 'sport' ? this.sportName(it, t) : it.name);
-            const markerType = cat.key === 'park' ? '<br>' + this.parkClassLabel(it.park_class, t) : (cat.key === 'sport' ? '<br>' + this.sportClassLabel(it.facility_class, t) : '');
+            const markerType = cat.key === 'park' ? this.parkClassLabel(it.park_class, t) : (cat.key === 'sport' ? this.sportClassLabel(it.facility_class, t) : '');
             const m = L.circleMarker([it.lat, it.lon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
-              .bindPopup('<b>' + markerName + '</b>' + markerType + '<br>📍 ' + t.straightLine + ': ' + this.fmtDist(straight) + '<br>🚶 ' + t.estimatedWalk + ': ~' + this.fmtDist(it.walk_m) + ' · ' + it.walk_min + ' ' + t.minU + '<br>🚗 ' + t.estimatedDrive + ': ~' + this.fmtDist(it.drive_m) + ' · ' + it.drive_min + ' ' + t.minU);
+              .bindPopup(this.poiPopupContent(markerName, markerType, straight, it, t));
             m.addTo(g); this.mk[cat.key][i] = m;
           });
           this.groups[cat.key] = g;
           if (!this.state.hidden[cat.key]) g.addTo(this.map);
         });
         this.map.fitBounds(circle.getBounds().pad(0.04));
+      }
+
+      appendPopupLine(wrapper, value) {
+        if (wrapper.childNodes.length) wrapper.appendChild(document.createElement('br'));
+        const line = document.createElement('span');
+        line.textContent = String(value == null ? '' : value);
+        wrapper.appendChild(line);
+      }
+
+      homePopupContent(address, t) {
+        const wrapper = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = String(address == null ? '' : address);
+        wrapper.appendChild(title);
+        this.appendPopupLine(wrapper, t.searched);
+        return wrapper;
+      }
+
+      poiPopupContent(name, type, straight, item, t) {
+        const wrapper = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = String(name == null ? '' : name);
+        wrapper.appendChild(title);
+        if (type) this.appendPopupLine(wrapper, type);
+        this.appendPopupLine(wrapper, '📍 ' + t.straightLine + ': ' + this.fmtDist(straight));
+        this.appendPopupLine(wrapper, '🚶 ' + t.estimatedWalk + ': ~' + this.fmtDist(item.walk_m) + ' · ' + item.walk_min + ' ' + t.minU);
+        this.appendPopupLine(wrapper, '🚗 ' + t.estimatedDrive + ': ~' + this.fmtDist(item.drive_m) + ' · ' + item.drive_min + ' ' + t.minU);
+        return wrapper;
       }
 
       addTiles() {

@@ -32,6 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
 DEMO_LAT, DEMO_LON = 50.876182, 4.680335
 SUPPORTED_LANGS = ("tr", "en", "nl")
+MAX_ADDRESS_LENGTH = 300
 LABELS = {
     "tr": {"school": "Okul", "market": "Market", "health": "Sağlık", "transit": "Ulaşım", "park": "Park", "sport": "Spor"},
     "en": {"school": "School", "market": "Groceries", "health": "Health", "transit": "Transit", "park": "Park", "sport": "Sports"},
@@ -123,6 +124,29 @@ def _current_address_provider():
         return ADDRESS_PROVIDER
     api_key = os.environ.get("GEOAPIFY_API_KEY", "").strip()
     return GeoapifyAddressSuggestionProvider(api_key) if api_key else None
+
+
+def _json_error(code, message, status):
+    """Return the stable JSON error envelope used by the preview APIs."""
+    return jsonify({"error": {"code": code, "message": message}}), status
+
+
+def _request_number(value):
+    """Convert an API number while explicitly excluding JSON booleans."""
+    if isinstance(value, bool):
+        raise ValueError("boolean is not a number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("number must be finite")
+    return number
+
+
+def _request_integer(value):
+    """Convert an integer parameter without accepting booleans or fractions."""
+    number = _request_number(value)
+    if not number.is_integer():
+        raise ValueError("integer required")
+    return int(number)
 
 
 def _existing_cache(env_name, filename):
@@ -475,46 +499,89 @@ def health():
 
 @app.get("/api/address-suggestions")
 def address_suggestions_api():
-    lang = str(request.args.get("lang", "en")).lower()
-    if lang not in SUPPORTED_LANGS:
-        return jsonify({"error": "Unsupported language."}), 400
-    query = str(request.args.get("q", "")).strip()
-    provider = _current_address_provider()
-    if len(query) < 3:
-        return jsonify({"available": provider is not None, "suggestions": []})
-    if provider is None:
-        return jsonify({"available": False, "suggestions": [],
-                        "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
     try:
-        suggestions = provider.suggest(query, lang, limit=6)
-    except (requests.RequestException, ValueError) as exc:
-        LOGGER.warning("Address autocomplete upstream failure (%s)",
-                       type(exc).__name__)
-        return jsonify({"available": False, "suggestions": [],
-                        "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
-    return jsonify({"available": True, "suggestions": suggestions})
+        lang = str(request.args.get("lang", "en")).lower()
+        if lang not in SUPPORTED_LANGS:
+            return _json_error("invalid_request", "Unsupported language.", 400)
+        query = str(request.args.get("q", "")).strip()
+        provider = _current_address_provider()
+        if len(query) < 3:
+            return jsonify({"available": provider is not None, "suggestions": []})
+        if provider is None:
+            return jsonify({"available": False, "suggestions": [],
+                            "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
+        try:
+            suggestions = provider.suggest(query, lang, limit=6)
+        except (requests.RequestException, ValueError) as exc:
+            LOGGER.warning("Address autocomplete upstream failure (%s)",
+                           type(exc).__name__)
+            return jsonify({"available": False, "suggestions": [],
+                            "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
+        return jsonify({"available": True, "suggestions": suggestions})
+    except Exception:
+        LOGGER.exception("Unexpected address autocomplete failure")
+        return _json_error(
+            "internal_error", "Address suggestions are temporarily unavailable.", 500)
 
 
 @app.post("/api/analyze")
 def analyze_api():
-    body = request.get_json(silent=True) or {}
-    lang = str(body.get("lang", "tr")).lower()
-    if lang not in SUPPORTED_LANGS:
-        return jsonify({"error": "Unsupported language."}), 400
     try:
-        radius = int(body.get("radius", DEFAULT_RADIUS_M))
-        topn = int(body.get("topn", TOP_N))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid radius or topn."}), 400
-    if radius not in (1000, 2500, 5000) or not (1 <= topn <= 20):
-        return jsonify({"error": "Preview radius/topn is out of range."}), 400
+        return _analyze_api_response()
+    except FileNotFoundError:
+        LOGGER.exception("Required analysis data is unavailable")
+        return _json_error(
+            "service_unavailable", "Required analysis data is unavailable.", 503)
+    except Exception:
+        LOGGER.exception("Unexpected analysis failure")
+        return _json_error(
+            "internal_error", "The analysis could not be completed.", 500)
 
-    address = str(body.get("address") or "").strip()
-    if body.get("lat") is not None and body.get("lon") is not None:
+
+def _analyze_api_response():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return _json_error("invalid_request", "A JSON object is required.", 400)
+
+    lang_value = body.get("lang", "tr")
+    if not isinstance(lang_value, str):
+        return _json_error("invalid_request", "Unsupported language.", 400)
+    lang = lang_value.lower()
+    if lang not in SUPPORTED_LANGS:
+        return _json_error("invalid_request", "Unsupported language.", 400)
+    try:
+        radius = _request_integer(body.get("radius", DEFAULT_RADIUS_M))
+        topn = _request_integer(body.get("topn", TOP_N))
+    except (TypeError, ValueError):
+        return _json_error("invalid_request", "Invalid radius or topn.", 400)
+    if radius not in (1000, 2500, 5000) or not (1 <= topn <= 20):
+        return _json_error(
+            "invalid_request", "Preview radius/topn is out of range.", 400)
+
+    has_address = "address" in body and body["address"] is not None
+    if has_address and not isinstance(body["address"], str):
+        return _json_error("invalid_request", "Address must be a string.", 400)
+    address = body.get("address", "").strip() if has_address else ""
+    if has_address and not address:
+        return _json_error("invalid_request", "Address must not be blank.", 400)
+    if len(address) > MAX_ADDRESS_LENGTH:
+        return _json_error(
+            "invalid_request",
+            f"Address must be at most {MAX_ADDRESS_LENGTH} characters.", 400)
+
+    has_lat = "lat" in body and body["lat"] is not None
+    has_lon = "lon" in body and body["lon"] is not None
+    if has_lat != has_lon:
+        return _json_error(
+            "invalid_request", "Latitude and longitude must be provided together.", 400)
+
+    if has_lat:
         try:
-            lat, lon = float(body["lat"]), float(body["lon"])
+            lat, lon = _request_number(body["lat"]), _request_number(body["lon"])
         except (TypeError, ValueError):
-            return jsonify({"error": "Invalid coordinates."}), 400
+            return _json_error("invalid_request", "Invalid coordinates.", 400)
+        if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+            return _json_error("invalid_request", "Coordinates are out of range.", 400)
         display_address = address or f"({lat:.6f}, {lon:.6f})"
     elif address:
         if DATA_MODE == "demo":
@@ -522,10 +589,12 @@ def analyze_api():
         else:
             try:
                 lat, lon, display_address = geocode(address)
-            except Exception:
-                return jsonify({"error": "Address could not be geocoded."}), 400
+            except RuntimeError:
+                return _json_error(
+                    "address_not_found", "Address could not be geocoded.", 400)
     else:
-        return jsonify({"error": "Provide an address or coordinates."}), 400
+        return _json_error(
+            "invalid_request", "Provide an address or coordinates.", 400)
 
     return jsonify(_run_preview_analysis(lat, lon, display_address, radius, topn, lang))
 
