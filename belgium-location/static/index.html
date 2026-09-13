@@ -96,6 +96,28 @@
                 align-items: start
             }
             .category-grid > * { min-width: 0 }
+            .category-card { position: relative; overflow: visible }
+            .calculation-popover-wrap {
+                position: relative;
+                padding: 0 16px 11px 66px
+            }
+            .calculation-popover {
+                position: absolute;
+                z-index: 1600;
+                top: 30px;
+                right: 16px;
+                width: min(430px, calc(100% - 32px));
+                max-height: min(65vh, 520px);
+                box-sizing: border-box;
+                overflow-y: auto;
+                padding: 10px 11px;
+                border: 1px solid var(--line);
+                border-radius: 9px;
+                background: var(--surface);
+                box-shadow: 0 12px 34px rgba(20, 30, 48, .18);
+                color: var(--muted);
+                font: 600 11.5px/1.5 Manrope
+            }
             .health-breakdown-grid {
                 display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -192,6 +214,15 @@
                 .park-breakdown-grid, .sport-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
                 .poi-distances { flex-direction: column; align-items: flex-start; gap: 4px }
                 .transit-breakdown-grid { grid-template-columns: minmax(0, 1fr) }
+                .calculation-popover {
+                    position: fixed;
+                    top: 50%;
+                    left: 12px;
+                    right: 12px;
+                    width: auto;
+                    max-height: 72vh;
+                    transform: translateY(-50%)
+                }
             }
         </style>
     </helmet>
@@ -429,21 +460,28 @@
                             </sc-if>
 
                             <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
-                                <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+                                <div style="background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
                                     <div style="{{ gaugeStyle }}">
-                                        <div style="width:72px;height:72px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center">
-                                            <div style="font:800 27px/1 Manrope;letter-spacing:-0.02em">{{ overallStr
+                                        <div style="width:56px;height:56px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center">
+                                            <div style="font:800 22px/1 Manrope;letter-spacing:-0.02em">{{ overallStr
                                                 }}
                                             </div>
-                                            <div style="font:700 10.5px Manrope;color:var(--muted)">/ 10</div>
+                                            <div style="font:700 9.5px Manrope;color:var(--muted)">/ 10</div>
                                         </div>
                                     </div>
                                     <div style="flex:1;min-width:180px">
-                                        <div style="font:800 17px Manrope;margin-bottom:4px">{{ t.overall }}</div>
-                                        <div style="font:600 13.5px/1.5 Manrope;text-wrap:pretty;margin-bottom:6px;color:{{ overallColor }}">
-                                            {{ overallComment }}
-                                        </div>
+                                        <div style="font:800 16px Manrope">{{ t.overall }}</div>
+                                        <div style="font:700 11.5px/1.4 Manrope;color:var(--muted);margin-top:2px">{{ t.overallSubtitle }}</div>
+                                        <div style="font:600 12px/1.5 Manrope;text-wrap:pretty;margin-top:6px;color:var(--ink)">{{ t.overallScope }}</div>
                                         <div style="font:600 12px Manrope;color:var(--muted)">{{ radiusLine }}</div>
+                                        <button onClick="{{ toggleOverallInfo }}" aria-expanded="{{ overallInfoOpen }}"
+                                                style="margin-top:7px;padding:5px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.overallHow }}</button>
+                                        <sc-if value="{{ overallInfoOpen }}" hint-placeholder-val="{{ false }}">
+                                            <div style="margin-top:7px;padding:9px 10px;border-radius:9px;background:var(--surface);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                <div>{{ t.overallLimitations }}</div>
+                                                <div style="margin-top:5px">{{ t.overallCarNote }}</div>
+                                            </div>
+                                        </sc-if>
                                         <sc-if value="{{ dataNotice }}" hint-placeholder-val="{{ false }}">
                                             <div style="margin-top:8px;padding:7px 10px;border-radius:8px;background:rgba(232,132,44,.12);color:#b96116;font:700 11.5px/1.4 Manrope">
                                                 {{ dataNotice }}
@@ -469,7 +507,7 @@
 
                                 <div class="category-grid">
                                     <sc-for list="{{ cats }}" as="cat" hint-placeholder-count="6">
-                                        <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden">
+                                        <div class="category-card" style="background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)">
                                         <button onClick="{{ cat.toggle }}"
                                                 style="display:flex;width:100%;box-sizing:border-box;align-items:center;gap:12px;padding:14px 16px;min-height:44px;cursor:pointer;background:none;border:none;color:inherit;font-family:inherit;text-align:left">
                                             <div style="{{ cat.iconBubbleStyle }}">{{ cat.icon }}</div>
@@ -484,6 +522,10 @@
                                                     <div style="{{ cat.barStyle }}"></div>
                                                 </div>
                                                 <div style="display:flex;gap:8px;align-items:center;font:600 12px Manrope;color:var(--muted);flex-wrap:wrap">
+                                                    <sc-if value="{{ cat.isZeroScore }}" hint-placeholder-val="{{ false }}">
+                                                        <span>{{ t.zeroScoreNote }}</span>
+                                                    </sc-if>
+                                                    <sc-if value="{{ cat.hasPositiveScore }}" hint-placeholder-val="{{ true }}">
                                                     <sc-if value="{{ cat.isGenericSummary }}" hint-placeholder-val="{{ true }}">
                                                         <span>{{ cat.countStr }}</span><span>·</span><span>{{ cat.nearestStr }}</span>
                                                     </sc-if>
@@ -502,15 +544,16 @@
                                                     <sc-if value="{{ cat.isSport }}" hint-placeholder-val="{{ false }}">
                                                         <span>{{ cat.sportSummaryStr }}</span>
                                                     </sc-if>
+                                                    </sc-if>
                                                 </div>
                                             </div>
                                             <div style="{{ cat.chevStyle }}">›</div>
                                         </button>
                                         <sc-if value="{{ cat.isMarket }}" hint-placeholder-val="{{ false }}">
-                                            <div style="padding:0 16px 11px 66px">
-                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.marketHow }}</button>
+                                            <div class="calculation-popover-wrap" data-calculation-popover="market">
+                                                <button onClick="{{ cat.toggleInfo }}" aria-expanded="{{ cat.infoOpen }}" aria-controls="{{ cat.calculationPopoverId }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.marketHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                    <div id="{{ cat.calculationPopoverId }}" class="calculation-popover" role="dialog" aria-label="{{ cat.calculationLabel }}">
                                                         <div>{{ cat.marketNote }}</div>
                                                         <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
                                                             <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:9px 0">
@@ -525,10 +568,10 @@
                                             </div>
                                         </sc-if>
                                         <sc-if value="{{ cat.isSchool }}" hint-placeholder-val="{{ false }}">
-                                            <div style="padding:0 16px 11px 66px">
-                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.schoolHow }}</button>
+                                            <div class="calculation-popover-wrap" data-calculation-popover="school">
+                                                <button onClick="{{ cat.toggleInfo }}" aria-expanded="{{ cat.infoOpen }}" aria-controls="{{ cat.calculationPopoverId }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.schoolHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                    <div id="{{ cat.calculationPopoverId }}" class="calculation-popover" role="dialog" aria-label="{{ cat.calculationLabel }}">
                                                         <div>{{ t.schoolNote }}</div>
                                                         <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
                                                             <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:9px 0">
@@ -546,10 +589,10 @@
                                             </div>
                                         </sc-if>
                                         <sc-if value="{{ cat.isHealth }}" hint-placeholder-val="{{ false }}">
-                                            <div style="padding:0 16px 11px 66px">
-                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.healthHow }}</button>
+                                            <div class="calculation-popover-wrap" data-calculation-popover="health">
+                                                <button onClick="{{ cat.toggleInfo }}" aria-expanded="{{ cat.infoOpen }}" aria-controls="{{ cat.calculationPopoverId }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.healthHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                    <div id="{{ cat.calculationPopoverId }}" class="calculation-popover" role="dialog" aria-label="{{ cat.calculationLabel }}">
                                                         <div>{{ t.healthNote }}</div>
                                                         <sc-if value="{{ cat.hasBreakdown }}" hint-placeholder-val="{{ false }}">
                                                             <div class="health-breakdown-grid">
@@ -570,10 +613,10 @@
                                             </div>
                                         </sc-if>
                                         <sc-if value="{{ cat.isTransit }}" hint-placeholder-val="{{ false }}">
-                                            <div style="padding:0 16px 11px 66px">
-                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.transitHow }}</button>
+                                            <div class="calculation-popover-wrap" data-calculation-popover="transit">
+                                                <button onClick="{{ cat.toggleInfo }}" aria-expanded="{{ cat.infoOpen }}" aria-controls="{{ cat.calculationPopoverId }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.transitHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                    <div id="{{ cat.calculationPopoverId }}" class="calculation-popover" role="dialog" aria-label="{{ cat.calculationLabel }}">
                                                         <div><strong style="color:var(--ink)">{{ t.transitLocalLabel }}:</strong> {{ t.transitLocalExplanation }}</div>
                                                         <div style="margin-top:6px"><strong style="color:var(--ink)">{{ t.transitRailLabel }}:</strong> {{ t.transitRailExplanation }}</div>
                                                         <div style="margin-top:6px">{{ t.transitTotalExplanation }}</div>
@@ -585,10 +628,10 @@
                                             </div>
                                         </sc-if>
                                         <sc-if value="{{ cat.isPark }}" hint-placeholder-val="{{ false }}">
-                                            <div style="padding:0 16px 11px 66px">
-                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.parkHow }}</button>
+                                            <div class="calculation-popover-wrap" data-calculation-popover="park">
+                                                <button onClick="{{ cat.toggleInfo }}" aria-expanded="{{ cat.infoOpen }}" aria-controls="{{ cat.calculationPopoverId }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.parkHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                    <div id="{{ cat.calculationPopoverId }}" class="calculation-popover" role="dialog" aria-label="{{ cat.calculationLabel }}">
                                                         <div>{{ t.parkOverview }}</div>
                                                         <div style="margin-top:6px">{{ t.parkDistanceRadius }}</div>
                                                     </div>
@@ -596,10 +639,10 @@
                                             </div>
                                         </sc-if>
                                         <sc-if value="{{ cat.isSport }}" hint-placeholder-val="{{ false }}">
-                                            <div style="padding:0 16px 11px 66px">
-                                                <button onClick="{{ cat.toggleInfo }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.sportHow }}</button>
+                                            <div class="calculation-popover-wrap" data-calculation-popover="sport">
+                                                <button onClick="{{ cat.toggleInfo }}" aria-expanded="{{ cat.infoOpen }}" aria-controls="{{ cat.calculationPopoverId }}" style="padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font:700 10.5px Manrope;cursor:pointer">ⓘ {{ t.sportHow }}</button>
                                                 <sc-if value="{{ cat.infoOpen }}" hint-placeholder-val="{{ false }}">
-                                                    <div style="margin-top:7px;padding:10px 11px;border-radius:9px;background:var(--bg);font:600 11.5px/1.5 Manrope;color:var(--muted)">
+                                                    <div id="{{ cat.calculationPopoverId }}" class="calculation-popover" role="dialog" aria-label="{{ cat.calculationLabel }}">
                                                         <div>{{ t.sportOverview }}</div>
                                                         <div style="margin-top:6px">{{ t.sportDistanceRadius }}</div>
                                                     </div>
@@ -866,10 +909,21 @@
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
-          selectedCoords: null, marketInfoOpen: false, schoolInfoOpen: false, healthInfoOpen: false, transitInfoOpen: false, parkInfoOpen: false, sportInfoOpen: false, radiusInfoOpen: false,
+          selectedCoords: null, calculationPopover: null, radiusInfoOpen: false, overallInfoOpen: false,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
+        this.onDocumentPointerDown = event => {
+          const target = event && event.target;
+          if (this.state.calculationPopover && !(target && target.closest && target.closest('[data-calculation-popover]'))) {
+            this.setState({ calculationPopover: null });
+          }
+        };
+        this.onDocumentKeyDown = event => {
+          if (event && event.key === 'Escape' && this.state.calculationPopover) {
+            this.setState({ calculationPopover: null });
+          }
+        };
         this.onResize = () => {
           const width = window.innerWidth, n = width < 760;
           if (n !== this.state.isNarrow || width !== this.state.viewportWidth) this.setState({ isNarrow: n, viewportWidth: width });
@@ -877,23 +931,28 @@
         };
       }
 
-      DEF_ADDR() { return 'Tervuursesteenweg 147, 3001 Heverlee'; }
+      DEF_ADDR() { return 'Grote Markt 9, 3000 Leuven, België'; }
       COLORS() { return { school: '#2E6FDB', market: '#E8842C', health: '#D64545', transit: '#7C4DBE', park: '#3E9B4F', sport: '#3A8FA3' }; }
 
       T() {
         return {
           tr: {
-            brand: 'Ev Çevresi Analizi', h1: 'Bu adres, yaşamak için ne kadar uygun?',
-            sub: 'Bir adres girin — çevredeki okul, market, sağlık, ulaşım, park ve spor noktalarını bulup 0–10 arası puanlayalım.',
-            placeholder: 'Örn. Tervuursesteenweg 147, 3001 Heverlee', analyze: 'Analiz et', radius: 'Arama yarıçapı',
-            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.8762)', lonPh: 'Boylam (4.6803)', searchBtn: 'Ara',
+            brand: 'Ev Çevresi Analizi', h1: 'Yakın Çevre Erişim Skoru',
+            sub: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
+            placeholder: 'Örn. Grote Markt 9, 3000 Leuven, Belçika', analyze: 'Analiz et', radius: 'Arama yarıçapı',
+            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.87871)', lonPh: 'Boylam (4.70143)', searchBtn: 'Ara',
             recent: 'Son aramalar:', vp1t: '6 kategori, tek puan',
-            vp1d: 'Okul, market, sağlık, ulaşım, park ve spor ayrı ayrı puanlanır; hepsi tek yaşanabilirlik puanında birleşir.',
-            vp2t: 'Gerçek mesafeler', vp2d: 'Her nokta için yürüme ve araçla mesafe–süre bilgisi, OpenStreetMap verisiyle.',
+            vp1d: 'Okul, market, sağlık, ulaşım, park ve spor ayrı ayrı gösterilir; tek sayı yalnızca ikincil bir özettir.',
+            vp2t: 'Tahmini mesafe ve süre', vp2d: 'Tahminler kuş uçuşu mesafeden türetilir; gerçek bir rota planlaması değildir.',
             vp3t: 'Haritada keşfet', vp3d: 'Tüm noktaları interaktif haritada kategoriye göre filtreleyerek inceleyin.',
             footer: 'Veriler © OpenStreetMap katkıda bulunanları', styleGuide: 'Stil rehberi',
             themeDark: 'Koyu tema', themeLight: 'Açık tema', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
-            analyzing: 'Çevre analiz ediliyor…', overall: 'Genel yaşanabilirlik', radiusWord: 'Yarıçap',
+            analyzing: 'Çevre analiz ediliyor…', overall: 'Yakın Çevre Erişim Skoru', overallSubtitle: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
+            overallScope: 'Bu skor, yakın çevredeki ölçülen günlük hizmetlere erişimi özetler. Düşük bir skor, konumun yaşamak için kötü olduğu anlamına gelmez.',
+            overallHow: 'Bu skor neyi ölçer?',
+            overallLimitations: 'Bu skor güvenliği, konut maliyetini, gürültü veya kirliliği, hizmet kalitesini ya da gerçek araç yolculuk süresini ölçmez.',
+            overallCarNote: 'Skor yakın çevre erişimine odaklanır; araçla erişilebilen daha uzaktaki hizmetler skora sınırlı veya hiç katkı sağlamayabilir.',
+            radiusWord: 'Yarıçap',
             language: 'Dil', points: 'nokta', nearest: 'en yakın:', straightSuffix: 'kuş uçuşu',
             straightLine: 'Kuş uçuşu', estimatedWalk: 'Tahmini yürüyüş', estimatedDrive: 'Tahmini araç', walk: 'Yürüme', drive: 'Araçla', minU: 'dk',
             hospY: 'Hastane var', hospN: 'Hastane yok', cmp1: 'Karşılaştırma — yakında', cmp2: '2–3 adresi yan yana kıyaslayın (v2)',
@@ -903,6 +962,7 @@
             errServerT: 'Sunucu hatası', errServerD: 'Analiz servisine şu anda ulaşılamıyor. Birkaç saniye sonra tekrar deneyin.',
             errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
+            addressTypes: { building: 'Bina', street: 'Sokak', city: 'Şehir', amenity: 'Hizmet noktası', postcode: 'Posta kodu', suburb: 'Mahalle', district: 'İlçe' },
             schoolTypes: { school: 'Okul', kindergarten: 'Anaokulu' },
             healthTypes: { clinic: 'Klinik', doctor: 'Doktor', doctors: 'Doktor', pharmacy: 'Eczane', dentist: 'Diş hekimi', hospital: 'Hastane', physiotherapist: 'Fizyoterapist', psychotherapist: 'Psikoterapist', laboratory: 'Laboratuvar', blood_donation: 'Kan bağışı' },
             transitModes: { BUS: 'Otobüs', TRAM: 'Tramvay', METRO: 'Metro', LIGHT_RAIL: 'Hafif raylı sistem', RAIL: 'Tren' },
@@ -914,7 +974,8 @@
             sportUnnamedTypes: { multi_sport_centre: 'İsimsiz çok amaçlı spor merkezi', general_sports_centre: 'İsimsiz spor merkezi', sports_hall: 'İsimsiz spor salonu', fitness_gym: 'İsimsiz fitness merkezi', swimming: 'İsimsiz yüzme tesisi', stadium: 'İsimsiz stadyum', standalone_local: 'İsimsiz spor alanı', specialized: 'İsimsiz branşa özel spor tesisi', standalone_specialized: 'İsimsiz branşa özel spor alanı' },
             sportGenericClass: 'Spor tesisi', sportUnnamedGeneric: 'İsimsiz spor tesisi',
             marketHow: 'Nasıl hesaplanır?', schoolHow: 'Nasıl hesaplanır?', healthHow: 'Nasıl hesaplanır?', transitHow: 'Nasıl hesaplanır?', parkHow: 'Park skoru nasıl oluşuyor?', sportHow: 'Spor skoru nasıl oluşuyor?', displayRadius: 'Gösterim yarıçapı', radiusHow: 'Yarıçap bilgisi', refreshing: 'Güncelleniyor…',
-            radiusNote: 'Bu seçim adresin çevresindeki kuş uçuşu gösterim yarıçapını belirler. Tahmini yürüyüş ve araç mesafeleri bu değerden daha uzun olabilir.',
+            radiusNote: 'Bu seçim yalnızca harita ve listedeki kuş uçuşu gösterim alanını değiştirir. Kategori skorları kendi sabit değerlendirme mesafelerini kullanır ve değişmez.',
+            zeroScoreNote: 'Yakın değerlendirme yarıçapında skora katkı sağlayan uygun seçenek bulunamadı.',
             marketNote: 'Market skoru her zaman adresin 2,5 km çevresindeki market seçenekleri kullanılarak hesaplanır. 1 / 2,5 / 5 km seçimi yalnızca haritada ve listelerde gösterilen yerleri değiştirir; Market skorunu değiştirmez.',
             proximityLabel: 'Yakınlık', choiceLabel: 'Seçenek', marketScoreLabel: 'Market',
             marketChoiceNote: 'Yeterli sayıda market seçeneğine ulaşıldığında ek mağazalar seçenek puanını artırmaya devam etmez; güçlü bir market seçeneğine yakınlık fark yaratır.',
@@ -975,7 +1036,6 @@
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
-            comments: ['Günlük yaşam için mükemmel bir konum.', 'Günlük yaşam için çok elverişli konum.', 'Günlük yaşam için makul bir konum; bazı kategoriler zayıf.', 'Konum bazı temel ihtiyaçlarda yetersiz kalıyor.', 'Günlük ihtiyaçlar için elverişsiz bir konum.'],
             foundLine: (dist, n) => dist + ' yarıçapında ' + n + ' nokta bulundu',
             sgBack: '← Geri', sgPalette: 'Renk paleti', sgType: 'Tipografi — Manrope', sgComponents: 'Bileşenler',
             sgH: 'Başlık', sgCardT: 'Kart başlığı', sgCatT: 'Kategori adı', sgBody: 'Gövde metni', sgMeta: 'Meta', sgScore: 'Puan rakamları',
@@ -984,17 +1044,22 @@
             swNames: ['Arka plan', 'Yüzey', 'Metin', 'İkincil metin', 'Okul', 'Market', 'Sağlık', 'Ulaşım', 'Park', 'Spor', 'Puan · düşük', 'Puan · orta', 'Puan · yüksek']
           },
           en: {
-            brand: 'Home Area Analysis', h1: 'How liveable is this address?',
-            sub: 'Enter an address — we find nearby schools, shops, healthcare, transit, parks and sports, and score each from 0–10.',
-            placeholder: 'E.g. Tervuursesteenweg 147, 3001 Heverlee', analyze: 'Analyze', radius: 'Search radius',
-            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.8762)', lonPh: 'Longitude (4.6803)', searchBtn: 'Search',
+            brand: 'Home Area Analysis', h1: 'Nearby Access Score',
+            sub: 'Access to nearby everyday amenities and services',
+            placeholder: 'E.g. Grote Markt 9, 3000 Leuven, Belgium', analyze: 'Analyze', radius: 'Search radius',
+            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.87871)', lonPh: 'Longitude (4.70143)', searchBtn: 'Search',
             recent: 'Recent searches:', vp1t: '6 categories, one score',
-            vp1d: 'Schools, shops, healthcare, transit, parks and sports are scored separately, then combined into one liveability score.',
-            vp2t: 'Real distances', vp2d: 'Walking and driving distance–time for every place, powered by OpenStreetMap data.',
+            vp1d: 'Schools, groceries, healthcare, transit, parks and sports are shown separately; the single number is only a secondary summary.',
+            vp2t: 'Estimated distance and time', vp2d: 'Estimates are derived from straight-line distance and are not route planning.',
             vp3t: 'Explore on the map', vp3d: 'Filter every point by category on an interactive map.',
             footer: 'Data © OpenStreetMap contributors', styleGuide: 'Style guide',
             themeDark: 'Dark theme', themeLight: 'Light theme', newSearch: '← New search', print: 'Share / print report',
-            analyzing: 'Analyzing the area…', overall: 'Overall liveability', radiusWord: 'Radius',
+            analyzing: 'Analyzing the area…', overall: 'Nearby Access Score', overallSubtitle: 'Access to nearby everyday amenities and services',
+            overallScope: 'This score summarizes access to measured everyday amenities and services nearby. A low score does not mean the location is a bad place to live.',
+            overallHow: 'What does this score measure?',
+            overallLimitations: 'This score does not measure safety, housing cost, noise or pollution, service quality, or actual driving time.',
+            overallCarNote: 'The score focuses on nearby access; services that are practical to reach by car but farther away may contribute little or nothing.',
+            radiusWord: 'Radius',
             language: 'Language', points: 'places', nearest: 'nearest:', straightSuffix: 'straight-line',
             straightLine: 'Straight-line', estimatedWalk: 'Estimated walking', estimatedDrive: 'Estimated driving', walk: 'Walk', drive: 'Drive', minU: 'min',
             hospY: 'Hospital nearby', hospN: 'No hospital', cmp1: 'Comparison — coming soon', cmp2: 'Compare 2–3 addresses side by side (v2)',
@@ -1004,6 +1069,7 @@
             errServerT: 'Server error', errServerD: 'The analysis service is currently unreachable. Please try again in a few seconds.',
             errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
+            addressTypes: { building: 'Building', street: 'Street', city: 'City', amenity: 'Amenity', postcode: 'Postcode', suburb: 'Suburb', district: 'District' },
             schoolTypes: { school: 'School', kindergarten: 'Kindergarten' },
             healthTypes: { clinic: 'Clinic', doctor: 'Doctor', doctors: 'Doctor', pharmacy: 'Pharmacy', dentist: 'Dentist', hospital: 'Hospital', physiotherapist: 'Physiotherapist', psychotherapist: 'Psychotherapist', laboratory: 'Laboratory', blood_donation: 'Blood donation' },
             transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Light rail', RAIL: 'Rail' },
@@ -1015,7 +1081,8 @@
             sportUnnamedTypes: { multi_sport_centre: 'Unnamed multi-purpose sports centre', general_sports_centre: 'Unnamed sports centre', sports_hall: 'Unnamed sports hall', fitness_gym: 'Unnamed fitness centre', swimming: 'Unnamed swimming facility', stadium: 'Unnamed stadium', standalone_local: 'Unnamed sports area', specialized: 'Unnamed specialist sports facility', standalone_specialized: 'Unnamed specialist sports area' },
             sportGenericClass: 'Sports facility', sportUnnamedGeneric: 'Unnamed sports facility',
             marketHow: 'How is this calculated?', schoolHow: 'How is this calculated?', healthHow: 'How is this calculated?', transitHow: 'How is this calculated?', parkHow: 'How is the Park score built?', sportHow: 'How is the Sport score built?', displayRadius: 'Display radius', radiusHow: 'Radius information', refreshing: 'Updating…',
-            radiusNote: 'This selection sets the straight-line display radius around the analyzed address. Estimated walking and driving distances can be longer than this value.',
+            radiusNote: 'This selection only changes the straight-line display area on the map and in the list. Category scores use their own fixed evaluation distances and do not change.',
+            zeroScoreNote: 'No qualifying option that contributes to the score was found within the scoring radius.',
             marketNote: 'The Market score is always calculated using grocery options within 2.5 km of the address. The 1 / 2.5 / 5 km selection only changes which places are shown on the map and in the lists; it does not change the Market score.',
             proximityLabel: 'Proximity', choiceLabel: 'Choice', marketScoreLabel: 'Market',
             marketChoiceNote: 'Once there are enough grocery options, additional stores no longer increase the choice points; proximity to a strong grocery option then makes the difference.',
@@ -1076,7 +1143,6 @@
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
-            comments: ['An excellent location for daily life.', 'A very convenient location for daily life.', 'A reasonable location; some categories are weak.', 'The location falls short on some essentials.', 'An inconvenient location for daily needs.'],
             foundLine: (dist, n) => n + ' places found within ' + dist,
             sgBack: '← Back', sgPalette: 'Color palette', sgType: 'Typography — Manrope', sgComponents: 'Components',
             sgH: 'Heading', sgCardT: 'Card title', sgCatT: 'Category name', sgBody: 'Body text', sgMeta: 'Meta', sgScore: 'Score digits',
@@ -1085,17 +1151,22 @@
             swNames: ['Background', 'Surface', 'Text', 'Muted text', 'Schools', 'Groceries', 'Health', 'Transit', 'Parks', 'Sports', 'Score · low', 'Score · mid', 'Score · high']
           },
           nl: {
-            brand: 'Woonomgeving Analyse', h1: 'Hoe leefbaar is dit adres?',
-            sub: 'Voer een adres in — we vinden scholen, winkels, zorg, vervoer, parken en sport in de buurt en geven elk een score van 0–10.',
-            placeholder: 'Bijv. Tervuursesteenweg 147, 3001 Heverlee', analyze: 'Analyseer', radius: 'Zoekstraal',
-            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.8762)', lonPh: 'Lengtegraad (4.6803)', searchBtn: 'Zoek',
+            brand: 'Woonomgeving Analyse', h1: 'Nabijheids- en voorzieningenscore',
+            sub: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
+            placeholder: 'Bijv. Grote Markt 9, 3000 Leuven, België', analyze: 'Analyseer', radius: 'Zoekstraal',
+            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.87871)', lonPh: 'Lengtegraad (4.70143)', searchBtn: 'Zoek',
             recent: 'Recente zoekopdrachten:', vp1t: '6 categorieën, één score',
-            vp1d: 'Scholen, winkels, zorg, vervoer, parken en sport krijgen elk een score, samengevat in één leefbaarheidsscore.',
-            vp2t: 'Echte afstanden', vp2d: 'Loop- en rijafstand met tijd voor elke plek, op basis van OpenStreetMap-data.',
+            vp1d: 'Scholen, winkels, zorg, vervoer, parken en sport worden afzonderlijk getoond; het ene getal is alleen een secundaire samenvatting.',
+            vp2t: 'Geschatte afstand en reistijd', vp2d: 'De schattingen zijn afgeleid van de hemelsbrede afstand en zijn geen routeplanning.',
             vp3t: 'Verken op de kaart', vp3d: 'Filter alle punten per categorie op een interactieve kaart.',
             footer: 'Data © OpenStreetMap-bijdragers', styleGuide: 'Stijlgids',
             themeDark: 'Donker thema', themeLight: 'Licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
-            analyzing: 'Omgeving wordt geanalyseerd…', overall: 'Algemene leefbaarheid', radiusWord: 'Straal',
+            analyzing: 'Omgeving wordt geanalyseerd…', overall: 'Nabijheids- en voorzieningenscore', overallSubtitle: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
+            overallScope: 'Deze score vat de toegang tot gemeten dagelijkse voorzieningen en diensten in de buurt samen. Een lage score betekent niet dat de locatie een slechte plek is om te wonen.',
+            overallHow: 'Wat meet deze score?',
+            overallLimitations: 'Deze score meet geen veiligheid, woonkosten, geluid of vervuiling, kwaliteit van dienstverlening of werkelijke reistijd met de auto.',
+            overallCarNote: 'De score richt zich op toegang in de buurt; diensten die met de auto praktisch bereikbaar zijn maar verder weg liggen, tellen mogelijk weinig of niet mee.',
+            radiusWord: 'Straal',
             language: 'Taal', points: 'plekken', nearest: 'dichtstbij:', straightSuffix: 'hemelsbreed',
             straightLine: 'Hemelsbreed', estimatedWalk: 'Geschatte wandelafstand', estimatedDrive: 'Geschatte rijafstand', walk: 'Te voet', drive: 'Met de auto', minU: 'min',
             hospY: 'Ziekenhuis aanwezig', hospN: 'Geen ziekenhuis', cmp1: 'Vergelijking — binnenkort', cmp2: 'Vergelijk 2–3 adressen naast elkaar (v2)',
@@ -1105,6 +1176,7 @@
             errServerT: 'Serverfout', errServerD: 'De analysedienst is momenteel niet bereikbaar. Probeer het over enkele seconden opnieuw.',
             errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
+            addressTypes: { building: 'Gebouw', street: 'Straat', city: 'Stad', amenity: 'Voorziening', postcode: 'Postcode', suburb: 'Buurt', district: 'Wijk' },
             schoolTypes: { school: 'School', kindergarten: 'Kleuterschool' },
             healthTypes: { clinic: 'Kliniek', doctor: 'Arts', doctors: 'Arts', pharmacy: 'Apotheek', dentist: 'Tandarts', hospital: 'Ziekenhuis', physiotherapist: 'Kinesitherapeut', psychotherapist: 'Psychotherapeut', laboratory: 'Laboratorium', blood_donation: 'Bloeddonatie' },
             transitModes: { BUS: 'Bus', TRAM: 'Tram', METRO: 'Metro', LIGHT_RAIL: 'Lightrail', RAIL: 'Trein' },
@@ -1116,7 +1188,8 @@
             sportUnnamedTypes: { multi_sport_centre: 'Naamloos multifunctioneel sportcentrum', general_sports_centre: 'Naamloos sportcentrum', sports_hall: 'Naamloze sporthal', fitness_gym: 'Naamloos fitnesscentrum', swimming: 'Naamloze zwemvoorziening', stadium: 'Naamloos stadion', standalone_local: 'Naamloze sportplek', specialized: 'Naamloze gespecialiseerde sportvoorziening', standalone_specialized: 'Naamloze gespecialiseerde sportplek' },
             sportGenericClass: 'Sportvoorziening', sportUnnamedGeneric: 'Naamloze sportvoorziening',
             marketHow: 'Hoe wordt dit berekend?', schoolHow: 'Hoe wordt dit berekend?', healthHow: 'Hoe wordt dit berekend?', transitHow: 'Hoe wordt dit berekend?', parkHow: 'Hoe is de Parkscore opgebouwd?', sportHow: 'Hoe is de Sportscore opgebouwd?', displayRadius: 'Weergavestraal', radiusHow: 'Informatie over de straal', refreshing: 'Bijwerken…',
-            radiusNote: 'Deze keuze bepaalt de hemelsbrede weergavestraal rond het geanalyseerde adres. De geschatte wandel- en rijafstanden kunnen langer zijn dan deze waarde.',
+            radiusNote: 'Deze keuze verandert alleen het hemelsbrede weergavegebied op de kaart en in de lijst. Categoriescores gebruiken hun eigen vaste beoordelingsafstanden en veranderen niet.',
+            zeroScoreNote: 'Geen geschikte optie die aan de score bijdraagt gevonden binnen de beoordelingsradius.',
             marketNote: 'De marktscore wordt altijd berekend op basis van de winkelmogelijkheden binnen 2,5 km van het adres. De keuze 1 / 2,5 / 5 km verandert alleen welke locaties op de kaart en in de lijsten worden getoond; de marktscore verandert niet.',
             proximityLabel: 'Nabijheid', choiceLabel: 'Keuze', marketScoreLabel: 'Markt',
             marketChoiceNote: 'Zodra er genoeg winkelopties zijn, verhogen extra winkels de keuzepunten niet verder; de nabijheid van een sterke winkeloptie maakt dan het verschil.',
@@ -1177,7 +1250,6 @@
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
-            comments: ['Een uitstekende locatie voor het dagelijks leven.', 'Een zeer gunstige locatie voor het dagelijks leven.', 'Een redelijke locatie; sommige categorieën zijn zwak.', 'De locatie schiet tekort op enkele basisbehoeften.', 'Een ongunstige locatie voor dagelijkse behoeften.'],
             foundLine: (dist, n) => n + ' plekken gevonden binnen ' + dist,
             sgBack: '← Terug', sgPalette: 'Kleurenpalet', sgType: 'Typografie — Manrope', sgComponents: 'Componenten',
             sgH: 'Kop', sgCardT: 'Karttitel', sgCatT: 'Categorienaam', sgBody: 'Broodtekst', sgMeta: 'Meta', sgScore: 'Scorecijfers',
@@ -1203,7 +1275,7 @@
 
       buildData(addr, radius) {
         return {
-          display_address: addr, lat: 50.876182, lon: 4.680335, radius: radius, overall: 7.4,
+          display_address: addr, lat: 50.87871, lon: 4.70143, radius: radius, overall: 7.4,
           categories: [
             { key: 'school', score: 7.8, count: 9, nearest_m: 420, has_hospital: null, items: [
               { name: 'Heilig Hartcollege', lat: 50.8795, lon: 4.6785, walk_m: 420, walk_min: 6, drive_m: 500, drive_min: 2 },
@@ -1354,6 +1426,10 @@
           ? category.items.filter(item => item && item.score_eligible === true)
           : [];
       }
+      addressResultType(value, t) {
+        const raw = String(value || '').trim();
+        return raw ? (t.addressTypes[raw] || raw.replace(/_/g, ' ')) : '';
+      }
       scoreColor(s) { return s < 4 ? '#D64545' : s < 7 ? '#E8963B' : '#3E9B4F'; }
 
       ic(key, color, size) {
@@ -1446,9 +1522,9 @@
         const r = radius || this.state.radius;
         const opts = options || {}, preserve = !!opts.preserve;
         this.setState(preserve
-          ? { formError: '', refreshing: true, radius: r }
+          ? { formError: '', refreshing: true, radius: r, calculationPopover: null }
           : { formError: '', view: 'analysis', status: 'loading', address: addr, open: null, hidden: {}, radius: r,
-              refreshing: false, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
+              refreshing: false, suggestions: [], suggestionMessage: '', suggestionIndex: -1, calculationPopover: null });
         clearTimeout(this._st);
 
         // Gövde: "enlem, boylam" biçimi koordinat olarak, aksi halde adres olarak gönderilir.
@@ -1488,9 +1564,16 @@
         this.setState({ lang, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
       }
 
-      componentDidMount() { window.addEventListener('resize', this.onResize); this.syncMap(); }
+      componentDidMount() {
+        window.addEventListener('resize', this.onResize);
+        document.addEventListener('pointerdown', this.onDocumentPointerDown);
+        document.addEventListener('keydown', this.onDocumentKeyDown);
+        this.syncMap();
+      }
       componentWillUnmount() {
         window.removeEventListener('resize', this.onResize);
+        document.removeEventListener('pointerdown', this.onDocumentPointerDown);
+        document.removeEventListener('keydown', this.onDocumentKeyDown);
         clearTimeout(this._st); clearTimeout(this._lt); clearTimeout(this._ac);
         if (this.map) { this.map.remove(); this.map = null; }
       }
@@ -1582,7 +1665,7 @@
 
         const suggestions = (S.suggestions || []).map((suggestion, index) => ({
           label: suggestion.label,
-          resultType: String(suggestion.result_type || '').replace(/_/g, ' '),
+          resultType: this.addressResultType(suggestion.result_type, t),
           pick: event => { if (event) event.preventDefault(); this.selectSuggestion(suggestion); },
           style: {
             width: '100%', border: 'none', borderBottom: '1px solid var(--line)', background: index === S.suggestionIndex ? 'var(--chip)' : 'var(--surface)',
@@ -1618,8 +1701,11 @@
           return {
             key: cat.key, label: t.cats[cat.key], count: visibleCount, isOpen: open,
             isMarket: cat.key === 'market', isSchool: cat.key === 'school', isHealth: cat.key === 'health', isTransit: cat.key === 'transit', isPark: cat.key === 'park', isSport: cat.key === 'sport',
+            isZeroScore: Number(cat.score) === 0, hasPositiveScore: Number(cat.score) !== 0,
             isGenericSummary: cat.key !== 'health' && cat.key !== 'transit' && cat.key !== 'park' && cat.key !== 'sport',
-            infoOpen: cat.key === 'market' ? S.marketInfoOpen : (cat.key === 'school' ? S.schoolInfoOpen : (cat.key === 'health' ? S.healthInfoOpen : (cat.key === 'transit' ? S.transitInfoOpen : (cat.key === 'park' ? S.parkInfoOpen : (cat.key === 'sport' && S.sportInfoOpen))))),
+            infoOpen: S.calculationPopover === cat.key,
+            calculationPopoverId: 'calculation-popover-' + cat.key,
+            calculationLabel: t[cat.key + 'How'],
             icon: this.ic(cat.key, col, 19),
             iconBubbleStyle: { width: '38px', height: '38px', borderRadius: '11px', background: this.hexA(col, dark ? 0.2 : 0.12), display: 'grid', placeItems: 'center', flex: 'none' },
             scoreStr: cat.key === 'transit' ? this.fmtTransitValue(cat.score) : (cat.key === 'park' ? this.fmtParkValue(cat.score) : (cat.key === 'sport' ? this.fmtSportValue(cat.score) : this.fmtScore(cat.score))),
@@ -1706,17 +1792,10 @@
             sportWinnerClass: sportWinner ? this.sportClassLabel(sportWinner.facility_class, t) : '',
             sportWinnerDistance: sportWinner && Number.isFinite(sportWinner.distance_m) ? t.straightLine + ' ' + this.fmtSportDistance(sportWinner.distance_m) : '',
             sportChoiceCountStr: sportBreakdown && sportBreakdown.choice ? t.sportChoiceCount(Number.isFinite(sportBreakdown.choice.alternatives_used) ? sportBreakdown.choice.alternatives_used : (Array.isArray(sportBreakdown.choice.alternatives) ? sportBreakdown.choice.alternatives.length : 0)) : t.sportChoiceCount(0),
-            toggleInfo: () => cat.key === 'school'
-              ? this.setState({ schoolInfoOpen: !this.state.schoolInfoOpen })
-              : (cat.key === 'health'
-                  ? this.setState({ healthInfoOpen: !this.state.healthInfoOpen })
-                  : (cat.key === 'transit'
-                      ? this.setState({ transitInfoOpen: !this.state.transitInfoOpen })
-                      : (cat.key === 'park'
-                          ? this.setState({ parkInfoOpen: !this.state.parkInfoOpen })
-                          : (cat.key === 'sport'
-                              ? this.setState({ sportInfoOpen: !this.state.sportInfoOpen })
-                              : this.setState({ marketInfoOpen: !this.state.marketInfoOpen }))))),
+            toggleInfo: event => {
+              if (event) event.stopPropagation();
+              this.setState({ calculationPopover: S.calculationPopover === cat.key ? null : cat.key });
+            },
             limitNote: cat.key !== 'sport' && cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
             chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
             toggle: () => this.setState({ open: open ? null : cat.key }),
@@ -1758,7 +1837,6 @@
         });
 
         const overall = d ? d.overall : 0, oc = this.scoreColor(overall);
-        const ci = overall >= 8 ? 0 : overall >= 7 ? 1 : overall >= 5.5 ? 2 : overall >= 4 ? 3 : 4;
         const poiTotal = d ? d.categories.reduce((s, c) => s + (c.count || 0), 0) : 0;
 
         const ERR = {
@@ -1801,8 +1879,10 @@
           radiusOpts, resultRadiusOpts, recent, hasRecent: recent.length > 0,
           radiusInfoOpen: S.radiusInfoOpen,
           toggleRadiusInfo: () => this.setState({ radiusInfoOpen: !this.state.radiusInfoOpen }),
+          overallInfoOpen: S.overallInfoOpen,
+          toggleOverallInfo: () => this.setState({ overallInfoOpen: !this.state.overallInfoOpen }),
           openStyle: e => { e.preventDefault(); this.setState({ view: 'style' }); },
-          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false }),
+          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false, overallInfoOpen: false, calculationPopover: null }),
           onPrint: () => window.print(),
           retry: () => this.doSearch(S.address || this.DEF_ADDR()),
           retryBigger: () => this.doSearch(S.address || this.DEF_ADDR(), 5000),
@@ -1812,10 +1892,10 @@
           mapBoxStyle, panelStyle,
           isRefreshing: S.refreshing,
           cats, skeletons: [1, 2, 3, 4, 5, 6],
-          overallStr: d ? this.fmtScore(overall) : '', overallColor: oc, overallComment: t.comments[ci],
+          overallStr: d ? this.fmtScore(overall) : '', overallColor: oc,
           radiusLine: d ? t.foundLine(this.fmtDist(d.radius), poiTotal) : '',
           dataNotice: d && d.data_mode === 'demo' ? t.demoNotice : null,
-          gaugeStyle: { width: '92px', height: '92px', borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', background: 'conic-gradient(' + oc + ' ' + (overall * 10) + '%, var(--chip) 0)' },
+          gaugeStyle: { width: '72px', height: '72px', borderRadius: '50%', flex: 'none', display: 'grid', placeItems: 'center', background: 'conic-gradient(' + oc + ' ' + (overall * 10) + '%, var(--chip) 0)' },
           swatches
         };
       }

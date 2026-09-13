@@ -1116,5 +1116,184 @@ class SportFrontendContentTests(unittest.TestCase):
             self.assertIn(text, self.frontend)
 
 
+class NearbyAccessSemanticsContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_nearby_access_names_and_subtitles_exist_in_all_languages(self):
+        for text in (
+            "Yakın Çevre Erişim Skoru",
+            "Yakındaki günlük ihtiyaçlara ve hizmetlere erişim",
+            "Nearby Access Score",
+            "Access to nearby everyday amenities and services",
+            "Nabijheids- en voorzieningenscore",
+            "Toegang tot dagelijkse voorzieningen en diensten in de buurt",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_liveability_claims_and_qualitative_bands_are_removed(self):
+        for text in (
+            "Bu adres, yaşamak için ne kadar uygun?",
+            "Genel yaşanabilirlik",
+            "How liveable is this address?",
+            "Overall liveability",
+            "Hoe leefbaar is dit adres?",
+            "Algemene leefbaarheid",
+            "An excellent location for daily life.",
+            "Günlük yaşam için mükemmel bir konum.",
+            "Een uitstekende locatie voor het dagelijks leven.",
+            "overallComment",
+            "const ci = overall",
+        ):
+            self.assertNotIn(text, self.frontend)
+
+    def test_scope_limitations_and_rural_clarity_exist_in_all_languages(self):
+        for text in (
+            "Düşük bir skor, konumun yaşamak için kötü olduğu anlamına gelmez.",
+            "Bu skor güvenliği, konut maliyetini, gürültü veya kirliliği, hizmet kalitesini ya da gerçek araç yolculuk süresini ölçmez.",
+            "araçla erişilebilen daha uzaktaki hizmetler skora sınırlı veya hiç katkı sağlamayabilir.",
+            "A low score does not mean the location is a bad place to live.",
+            "This score does not measure safety, housing cost, noise or pollution, service quality, or actual driving time.",
+            "services that are practical to reach by car but farther away may contribute little or nothing.",
+            "Een lage score betekent niet dat de locatie een slechte plek is om te wonen.",
+            "Deze score meet geen veiligheid, woonkosten, geluid of vervuiling, kwaliteit van dienstverlening of werkelijke reistijd met de auto.",
+            "diensten die met de auto praktisch bereikbaar zijn maar verder weg liggen, tellen mogelijk weinig of niet mee.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_distance_copy_is_honest_in_all_languages(self):
+        for text in (
+            "Tahmini mesafe ve süre",
+            "Tahminler kuş uçuşu mesafeden türetilir; gerçek bir rota planlaması değildir.",
+            "Estimated distance and time",
+            "Estimates are derived from straight-line distance and are not route planning.",
+            "Geschatte afstand en reistijd",
+            "De schattingen zijn afgeleid van de hemelsbrede afstand en zijn geen routeplanning.",
+        ):
+            self.assertIn(text, self.frontend)
+        for text in ("Gerçek mesafeler", "Real distances", "Echte afstanden"):
+            self.assertNotIn(text, self.frontend)
+
+    def test_zero_score_wording_is_scoped_and_safe(self):
+        for text in (
+            "Yakın değerlendirme yarıçapında skora katkı sağlayan uygun seçenek bulunamadı.",
+            "No qualifying option that contributes to the score was found within the scoring radius.",
+            "Geen geschikte optie die aan de score bijdraagt gevonden binnen de beoordelingsradius.",
+        ):
+            self.assertIn(text, self.frontend)
+        self.assertIn("isZeroScore: Number(cat.score) === 0", self.frontend)
+        self.assertIn("hasPositiveScore: Number(cat.score) !== 0", self.frontend)
+
+    def test_general_radius_note_preserves_fixed_category_scoring(self):
+        for text in (
+            "Kategori skorları kendi sabit değerlendirme mesafelerini kullanır ve değişmez.",
+            "Category scores use their own fixed evaluation distances and do not change.",
+            "Categoriescores gebruiken hun eigen vaste beoordelingsafstanden en veranderen niet.",
+        ):
+            self.assertIn(text, self.frontend)
+        self.assertIn("resultRadiusOpts", self.frontend)
+
+    def test_existing_overall_weights_and_numeric_bindings_are_unchanged(self):
+        self.assertEqual(app.OVERALL_WEIGHTS, {
+            "market": 0.25,
+            "school": 0.25,
+            "health": 0.20,
+            "transit": 0.15,
+            "park": 0.10,
+            "sport": 0.05,
+        })
+        self.assertIn(
+            "overallStr: d ? this.fmtScore(overall) : ''",
+            self.frontend,
+        )
+        self.assertIn("scoreStr: cat.key === 'transit'", self.frontend)
+
+    def test_leuven_city_hall_example_and_coordinates_match(self):
+        self.assertNotIn("Tervuursesteenweg", self.frontend)
+        for address in (
+            "Grote Markt 9, 3000 Leuven, Belçika",
+            "Grote Markt 9, 3000 Leuven, Belgium",
+            "Grote Markt 9, 3000 Leuven, België",
+        ):
+            self.assertIn(address, self.frontend)
+        self.assertEqual(self.frontend.count("50.87871"), 4)
+        self.assertEqual(self.frontend.count("4.70143"), 4)
+        self.assertIn("DEF_ADDR() { return 'Grote Markt 9, 3000 Leuven, België'; }",
+                      self.frontend)
+
+    def test_autocomplete_result_types_are_reactively_localized(self):
+        for mapping in (
+            "building: 'Bina'", "building: 'Building'", "building: 'Gebouw'",
+            "street: 'Sokak'", "street: 'Street'", "street: 'Straat'",
+            "city: 'Şehir'", "city: 'City'", "city: 'Stad'",
+            "amenity: 'Hizmet noktası'", "amenity: 'Amenity'",
+            "amenity: 'Voorziening'",
+        ):
+            self.assertIn(mapping, self.frontend)
+        self.assertIn(
+            "resultType: this.addressResultType(suggestion.result_type, t)",
+            self.frontend,
+        )
+        self.assertIn(
+            "t.addressTypes[raw] || raw.replace(/_/g, ' ')",
+            self.frontend,
+        )
+
+    def test_all_six_calculation_explanations_use_one_popover_pattern(self):
+        for category in ("market", "school", "health", "transit", "park", "sport"):
+            self.assertIn(
+                'data-calculation-popover="' + category + '"',
+                self.frontend,
+            )
+        self.assertEqual(
+            self.frontend.count('class="calculation-popover" role="dialog"'),
+            6,
+        )
+        self.assertEqual(
+            self.frontend.count('aria-expanded="{{ cat.infoOpen }}"'),
+            6,
+        )
+        self.assertEqual(
+            self.frontend.count('aria-controls="{{ cat.calculationPopoverId }}"'),
+            6,
+        )
+        self.assertIn("position: absolute", self.frontend)
+        self.assertIn("position: fixed", self.frontend)
+
+    def test_only_one_calculation_popover_can_be_open(self):
+        self.assertIn("calculationPopover: null", self.frontend)
+        self.assertIn("infoOpen: S.calculationPopover === cat.key", self.frontend)
+        self.assertIn(
+            "calculationPopover: S.calculationPopover === cat.key ? null : cat.key",
+            self.frontend,
+        )
+        for legacy_state in (
+            "marketInfoOpen", "schoolInfoOpen", "healthInfoOpen",
+            "transitInfoOpen", "parkInfoOpen", "sportInfoOpen",
+        ):
+            self.assertNotIn(legacy_state, self.frontend)
+
+    def test_outside_click_and_escape_close_calculation_popover(self):
+        self.assertIn(
+            "document.addEventListener('pointerdown', this.onDocumentPointerDown)",
+            self.frontend,
+        )
+        self.assertIn(
+            "target.closest('[data-calculation-popover]')",
+            self.frontend,
+        )
+        self.assertIn("event.key === 'Escape'", self.frontend)
+        self.assertIn(
+            "document.addEventListener('keydown', this.onDocumentKeyDown)",
+            self.frontend,
+        )
+        self.assertIn(
+            "document.removeEventListener('pointerdown', this.onDocumentPointerDown)",
+            self.frontend,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
