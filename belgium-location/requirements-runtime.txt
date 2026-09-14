@@ -1,0 +1,10 @@
+duckdb==1.0.0
+Flask==3.0.3
+folium==0.16.0
+geographiclib==2.1
+geopy==2.4.1
+gunicorn==26.2.0
+pandas==2.2.2
+pyarrow==16.0.0
+requests==2.32.5
+shapely==2.1.1
