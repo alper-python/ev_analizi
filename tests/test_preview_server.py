@@ -453,10 +453,43 @@ class RuntimeReadinessFrontendContentTests(unittest.TestCase):
 
     def test_503_is_not_presented_as_address_not_found(self):
         failure_start = self.frontend.index("if (!ok) {")
-        failure_end = self.frontend.index("const total =", failure_start)
+        failure_end = self.frontend.index("const validAnalysis =", failure_start)
         failure_code = self.frontend[failure_start:failure_end]
         self.assertIn("status === 400 ? 'notfound'", failure_code)
         self.assertIn("unavailable ? 'unavailable'", failure_code)
+
+
+class ResultStateFrontendContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+        start = cls.frontend.index("const validAnalysis =")
+        end = cls.frontend.index(".catch(() =>", start)
+        cls.success_handler = cls.frontend[start:end]
+
+    def test_positive_scores_with_zero_display_counts_render_results(self):
+        self.assertNotIn("c.count", self.success_handler)
+        self.assertNotIn("total === 0", self.success_handler)
+        self.assertIn("Number.isFinite(category.score)", self.success_handler)
+        self.assertIn("status: 'results'", self.success_handler)
+
+    def test_valid_all_zero_scores_render_results(self):
+        self.assertIn("Number.isFinite(j.overall)", self.success_handler)
+        self.assertIn("Number.isFinite(category.score)", self.success_handler)
+        self.assertNotIn("category.score > 0", self.success_handler)
+        self.assertNotIn("j.overall > 0", self.success_handler)
+
+    def test_structurally_invalid_success_payload_uses_existing_empty_state(self):
+        self.assertIn("Array.isArray(j.categories)", self.success_handler)
+        self.assertIn("j.categories.length > 0", self.success_handler)
+        self.assertIn("if (!validAnalysis)", self.success_handler)
+        self.assertIn("errorKind: 'empty'", self.success_handler)
+
+    def test_normal_nonzero_display_result_path_is_preserved(self):
+        self.assertIn("this.saveRecent(addr)", self.success_handler)
+        self.assertIn("data: j", self.success_handler)
+        self.assertIn("recent: this.loadRecent()", self.success_handler)
 
 
 class RadiusReanalysisApiTests(unittest.TestCase):

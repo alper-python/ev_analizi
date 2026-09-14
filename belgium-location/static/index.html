@@ -1690,8 +1690,10 @@
                 data: (unavailable || rateLimited) ? null : this.state.data });
               return;
             }
-            const total = (j.categories || []).reduce((s, c) => s + (c.count || 0), 0);
-            if (!j.categories || total === 0) {
+            const validAnalysis = j && Number.isFinite(j.overall)
+              && Array.isArray(j.categories) && j.categories.length > 0
+              && j.categories.every(category => category && Number.isFinite(category.score));
+            if (!validAnalysis) {
               this.setState({ status: 'error', refreshing: false, errorKind: 'empty' });
               return;
             }
