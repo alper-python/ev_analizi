@@ -330,7 +330,7 @@
                     <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px">
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
                             <div style="flex:1 1 280px;min-width:0;position:relative">
-                                <input ref="{{ addrRef }}" onInput="{{ onAddrInput }}" onKeyDown="{{ onAddrKey }}" placeholder="{{ t.placeholder }}"
+                                <input ref="{{ addrRef }}" onInput="{{ onAddrInput }}" onKeyDown="{{ onAddrKey }}" placeholder="{{ t.placeholder }}" aria-label="{{ t.addressLabel }}"
                                        autocomplete="off" aria-autocomplete="list" aria-expanded="{{ suggestionsOpen }}"
                                        style="width:100%;padding:14px 16px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 15px Manrope;outline-color:#2E6FDB;min-width:0;min-height:44px;box-sizing:border-box">
                                 <sc-if value="{{ showSuggestionPanel }}" hint-placeholder-val="{{ false }}">
@@ -369,9 +369,9 @@
                                 {{ t.advanced }}
                             </summary>
                             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-                                <input ref="{{ latRef }}" placeholder="{{ t.latPh }}"
+                                <input ref="{{ latRef }}" placeholder="{{ t.latPh }}" aria-label="{{ t.latitudeLabel }}"
                                        style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
-                                <input ref="{{ lonRef }}" placeholder="{{ t.lonPh }}"
+                                <input ref="{{ lonRef }}" placeholder="{{ t.lonPh }}" aria-label="{{ t.longitudeLabel }}"
                                        style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
                                 <button onClick="{{ onCoordSearch }}"
                                         style="padding:11px 18px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 13px Manrope;cursor:pointer"
@@ -458,7 +458,7 @@
                                 <option value="tr">Türkçe</option><option value="nl">Nederlands</option><option value="en">English</option>
                             </select>
                         </label>
-                        <button onClick="{{ toggleTheme }}"
+                        <button onClick="{{ toggleTheme }}" aria-label="{{ themeActionLabel }}"
                                 style="flex:none;display:inline-flex;align-items:center;padding:9px 12px;min-height:38px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer">
                             {{ themeIcon }}
                         </button>
@@ -1054,8 +1054,8 @@
           tr: {
             brand: 'Ev Çevresi Analizi', h1: 'Yakın Çevre Erişim Skoru',
             sub: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
-            placeholder: 'Örn. Grote Markt 9, 3000 Leuven, Belçika', analyze: 'Analiz et', radius: 'Arama yarıçapı',
-            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.87871)', lonPh: 'Boylam (4.70143)', searchBtn: 'Ara',
+            placeholder: 'Örn. Grote Markt 9, 3000 Leuven, Belçika', addressLabel: 'Adres', analyze: 'Analiz et', radius: 'Arama yarıçapı',
+            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.87871)', lonPh: 'Boylam (4.70143)', latitudeLabel: 'Enlem', longitudeLabel: 'Boylam', searchBtn: 'Ara',
             recent: 'Son aramalar:', vp1t: '6 kategori, tek puan',
             vp1d: 'Okul, market, sağlık, ulaşım, park ve spor ayrı ayrı gösterilir; tek sayı yalnızca ikincil bir özettir.',
             vp2t: 'Tahmini mesafe ve süre', vp2d: 'Tahminler kuş uçuşu mesafeden türetilir; gerçek bir rota planlaması değildir.',
@@ -1067,7 +1067,7 @@
             transitOperators: 'Toplu taşıma işletmecileri',
             thirdPartyTiles: 'Harita arka planı üçüncü taraf Stadia Maps hizmetinden yüklenir.',
             tileUnavailable: 'Harita arka planı şu anda kullanılamıyor. Skorlar ve sonuç listeleri kullanılmaya devam edebilir.',
-            themeDark: 'Koyu tema', themeLight: 'Açık tema', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
+            themeDark: 'Koyu tema', themeLight: 'Açık tema', themeToDark: 'Koyu temaya geç', themeToLight: 'Açık temaya geç', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
             analyzing: 'Çevre analiz ediliyor…', overall: 'Yakın Çevre Erişim Skoru', overallSubtitle: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
             overallScope: 'Bu skor, yakın çevredeki ölçülen günlük hizmetlere erişimi özetler. Düşük bir skor, konumun yaşamak için kötü olduğu anlamına gelmez.',
             overallHow: 'Bu skor neyi ölçer?',
@@ -1169,8 +1169,8 @@
           en: {
             brand: 'Home Area Analysis', h1: 'Nearby Access Score',
             sub: 'Access to nearby everyday amenities and services',
-            placeholder: 'E.g. Grote Markt 9, 3000 Leuven, Belgium', analyze: 'Analyze', radius: 'Search radius',
-            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.87871)', lonPh: 'Longitude (4.70143)', searchBtn: 'Search',
+            placeholder: 'E.g. Grote Markt 9, 3000 Leuven, Belgium', addressLabel: 'Address', analyze: 'Analyze', radius: 'Search radius',
+            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.87871)', lonPh: 'Longitude (4.70143)', latitudeLabel: 'Latitude', longitudeLabel: 'Longitude', searchBtn: 'Search',
             recent: 'Recent searches:', vp1t: '6 categories, one score',
             vp1d: 'Schools, groceries, healthcare, transit, parks and sports are shown separately; the single number is only a secondary summary.',
             vp2t: 'Estimated distance and time', vp2d: 'Estimates are derived from straight-line distance and are not route planning.',
@@ -1182,7 +1182,7 @@
             transitOperators: 'Public transport operators',
             thirdPartyTiles: 'The map background is loaded from the third-party Stadia Maps service.',
             tileUnavailable: 'The map background is currently unavailable. Scores and result lists remain available.',
-            themeDark: 'Dark theme', themeLight: 'Light theme', newSearch: '← New search', print: 'Share / print report',
+            themeDark: 'Dark theme', themeLight: 'Light theme', themeToDark: 'Switch to dark theme', themeToLight: 'Switch to light theme', newSearch: '← New search', print: 'Share / print report',
             analyzing: 'Analyzing the area…', overall: 'Nearby Access Score', overallSubtitle: 'Access to nearby everyday amenities and services',
             overallScope: 'This score summarizes access to measured everyday amenities and services nearby. A low score does not mean the location is a bad place to live.',
             overallHow: 'What does this score measure?',
@@ -1284,8 +1284,8 @@
           nl: {
             brand: 'Woonomgeving Analyse', h1: 'Nabijheids- en voorzieningenscore',
             sub: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
-            placeholder: 'Bijv. Grote Markt 9, 3000 Leuven, België', analyze: 'Analyseer', radius: 'Zoekstraal',
-            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.87871)', lonPh: 'Lengtegraad (4.70143)', searchBtn: 'Zoek',
+            placeholder: 'Bijv. Grote Markt 9, 3000 Leuven, België', addressLabel: 'Adres', analyze: 'Analyseer', radius: 'Zoekstraal',
+            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.87871)', lonPh: 'Lengtegraad (4.70143)', latitudeLabel: 'Breedtegraad', longitudeLabel: 'Lengtegraad', searchBtn: 'Zoek',
             recent: 'Recente zoekopdrachten:', vp1t: '6 categorieën, één score',
             vp1d: 'Scholen, winkels, zorg, vervoer, parken en sport worden afzonderlijk getoond; het ene getal is alleen een secundaire samenvatting.',
             vp2t: 'Geschatte afstand en reistijd', vp2d: 'De schattingen zijn afgeleid van de hemelsbrede afstand en zijn geen routeplanning.',
@@ -1297,7 +1297,7 @@
             transitOperators: 'Openbaarvervoermaatschappijen',
             thirdPartyTiles: 'De kaartachtergrond wordt geladen via de externe dienst Stadia Maps.',
             tileUnavailable: 'De kaartachtergrond is momenteel niet beschikbaar. Scores en resultaten blijven bruikbaar.',
-            themeDark: 'Donker thema', themeLight: 'Licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
+            themeDark: 'Donker thema', themeLight: 'Licht thema', themeToDark: 'Schakel naar donker thema', themeToLight: 'Schakel naar licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
             analyzing: 'Omgeving wordt geanalyseerd…', overall: 'Nabijheids- en voorzieningenscore', overallSubtitle: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
             overallScope: 'Deze score vat de toegang tot gemeten dagelijkse voorzieningen en diensten in de buurt samen. Een lage score betekent niet dat de locatie een slechte plek is om te wonen.',
             overallHow: 'Wat meet deze score?',
@@ -2061,6 +2061,7 @@
           vpIcon1: this.ic('school', '#2E6FDB', 19), vpIcon2: this.ic('transit', '#7C4DBE', 19), vpIcon3: this.ic('park', '#3E9B4F', 19),
           themeIcon: this.ic(dark ? 'sun' : 'moon', 'currentColor', 15),
           themeLabel: dark ? t.themeLight : t.themeDark,
+          themeActionLabel: dark ? t.themeToLight : t.themeToDark,
           toggleTheme: () => { const th = dark ? 'light' : 'dark'; try { localStorage.setItem('eca-theme', th); } catch (e) {} this.setState({ theme: th }); },
           addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; },
           onAddrInput: e => this.handleAddressInput(e),

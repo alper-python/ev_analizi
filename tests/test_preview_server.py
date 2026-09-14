@@ -492,6 +492,67 @@ class ResultStateFrontendContentTests(unittest.TestCase):
         self.assertIn("recent: this.loadRecent()", self.success_handler)
 
 
+class AccessibilityBaselineContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_address_input_has_localized_programmatic_name(self):
+        start = self.frontend.index('<input ref="{{ addrRef }}"')
+        end = self.frontend.index('>', start)
+        address_input = self.frontend[start:end]
+        self.assertIn('aria-label="{{ t.addressLabel }}"', address_input)
+        self.assertIn('placeholder="{{ t.placeholder }}"', address_input)
+
+    def test_coordinate_inputs_have_localized_programmatic_names(self):
+        for ref_name, label_name in (
+            ("latRef", "latitudeLabel"),
+            ("lonRef", "longitudeLabel"),
+        ):
+            start = self.frontend.index(f'<input ref="{{{{ {ref_name} }}}}"')
+            end = self.frontend.index('>', start)
+            input_markup = self.frontend[start:end]
+            self.assertIn(
+                f'aria-label="{{{{ t.{label_name} }}}}"', input_markup)
+
+    def test_icon_only_theme_button_has_action_based_accessible_name(self):
+        self.assertEqual(
+            self.frontend.count('aria-label="{{ themeActionLabel }}"'), 1)
+        self.assertIn(
+            "themeActionLabel: dark ? t.themeToLight : t.themeToDark",
+            self.frontend,
+        )
+
+    def test_accessible_names_exist_in_tr_nl_and_en(self):
+        for value in (
+            "addressLabel: 'Adres'", "addressLabel: 'Address'",
+            "latitudeLabel: 'Enlem'", "latitudeLabel: 'Breedtegraad'",
+            "latitudeLabel: 'Latitude'", "longitudeLabel: 'Boylam'",
+            "longitudeLabel: 'Lengtegraad'", "longitudeLabel: 'Longitude'",
+            "themeToDark: 'Koyu temaya geç'",
+            "themeToLight: 'Açık temaya geç'",
+            "themeToDark: 'Schakel naar donker thema'",
+            "themeToLight: 'Schakel naar licht thema'",
+            "themeToDark: 'Switch to dark theme'",
+            "themeToLight: 'Switch to light theme'",
+        ):
+            self.assertIn(value, self.frontend)
+
+    def test_language_and_theme_state_continue_to_drive_names(self):
+        self.assertIn("const t = this.T()[S.lang]", self.frontend)
+        self.assertIn("this.setState({ lang, suggestions:", self.frontend)
+        self.assertIn("const th = dark ? 'light' : 'dark'", self.frontend)
+        self.assertIn("this.setState({ theme: th })", self.frontend)
+
+    def test_touched_controls_keep_native_semantics(self):
+        self.assertIn('<input ref="{{ addrRef }}"', self.frontend)
+        self.assertIn('<input ref="{{ latRef }}"', self.frontend)
+        self.assertIn('<input ref="{{ lonRef }}"', self.frontend)
+        self.assertIn('<button onClick="{{ toggleTheme }}"', self.frontend)
+        self.assertNotIn('tabindex="1"', self.frontend.lower())
+
+
 class RadiusReanalysisApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
