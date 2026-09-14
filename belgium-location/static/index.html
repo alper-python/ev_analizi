@@ -1156,6 +1156,7 @@
             sportDistanceRadius: 'Mesafeler kuş uçuşudur; gerçek giriş ve yürüme yolu farklı olabilir. Haritadaki 1 / 2,5 / 5 km seçimi Spor skorunu değiştirmez.',
             sportChoiceCount: count => count === 0 ? 'Ek puana katkı sağlayan başka spor seçeneği bulunamadı.' : (count === 1 ? '1 bağımsız spor seçeneği ek puana katkı sağlıyor.' : count + ' bağımsız spor seçeneği ek puana katkı sağlıyor.'),
             sportNearbyTitle: 'Yakındaki spor seçenekleri',
+            sportTopNDisclosure: (total, shown) => 'Toplam ' + total + ' spor noktası bulundu. İlk ' + shown + ' tanesi gösteriliyor.',
             suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.', suggestRateLimited: 'Çok fazla istek gönderildi. Lütfen kısa bir süre sonra tekrar deneyin.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
@@ -1271,6 +1272,7 @@
             sportDistanceRadius: 'Distances are straight-line; the actual entrance and walking route may differ. Changing the 1 / 2.5 / 5 km display radius does not change the Sport score.',
             sportChoiceCount: count => count === 0 ? 'No other sports option contributes extra points.' : (count === 1 ? '1 independent sports option contributes extra points.' : count + ' independent sports options contribute extra points.'),
             sportNearbyTitle: 'Nearby sports options',
+            sportTopNDisclosure: (total, shown) => total + ' sports locations found. Showing the first ' + shown + '.',
             suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.', suggestRateLimited: 'Too many requests. Please try again shortly.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
@@ -1386,6 +1388,7 @@
             sportDistanceRadius: 'Afstanden zijn hemelsbreed; de werkelijke ingang en wandelroute kunnen verschillen. Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de Sportscore niet.',
             sportChoiceCount: count => count === 0 ? 'Geen andere sportoptie draagt bij aan extra punten.' : (count === 1 ? '1 onafhankelijke sportoptie draagt bij aan extra punten.' : count + ' onafhankelijke sportopties dragen bij aan extra punten.'),
             sportNearbyTitle: 'Sportopties in de buurt',
+            sportTopNDisclosure: (total, shown) => 'In totaal zijn ' + total + ' sportlocaties gevonden. De eerste ' + shown + ' worden getoond.',
             suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.', suggestRateLimited: 'Er zijn te veel verzoeken verzonden. Probeer het over een korte tijd opnieuw.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
@@ -1564,6 +1567,12 @@
         return category && Array.isArray(category.items)
           ? category.items.filter(item => item && item.score_eligible === true)
           : [];
+      }
+      sportLimitDisclosure(category, visibleItems, t) {
+        const total = Number(category && category.count);
+        const shown = Array.isArray(visibleItems) ? visibleItems.length : 0;
+        if (!Number.isFinite(total) || shown === 0 || total <= shown) return null;
+        return t.sportTopNDisclosure(total, shown);
       }
       addressResultType(value, t) {
         const raw = String(value || '').trim();
@@ -1885,6 +1894,7 @@
           const sportBreakdown = cat.key === 'sport' && cat.score_breakdown ? cat.score_breakdown : null;
           const sportWinner = this.sportWinner(sportBreakdown);
           const visibleItems = cat.key === 'sport' ? this.visibleSportItems(cat) : cat.items;
+          const sportLimitNote = cat.key === 'sport' ? this.sportLimitDisclosure(cat, visibleItems, t) : null;
           const visibleCount = cat.count;
           const hasLocalTransit = !!(transitBreakdown && transitBreakdown.best_local_logical_stop_id);
           const hasRailTransit = !!(transitBreakdown && transitBreakdown.best_rail_logical_station_id);
@@ -1989,7 +1999,7 @@
               if (event) event.stopPropagation();
               this.setState({ calculationPopover: S.calculationPopover === cat.key ? null : cat.key });
             },
-            limitNote: cat.key !== 'sport' && cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null,
+            limitNote: cat.key === 'sport' ? sportLimitNote : (cat.count > cat.items.length ? t.showingNearest(cat.count, cat.items.length) : null),
             chevStyle: { flex: 'none', color: 'var(--muted)', font: '600 18px Manrope', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .2s ease' },
             toggle: () => this.setState({ open: open ? null : cat.key }),
             toggleFilter: () => {

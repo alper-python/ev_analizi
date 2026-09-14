@@ -1473,7 +1473,7 @@ class SportFrontendContentTests(unittest.TestCase):
 
     def test_collapsed_summary_uses_authoritative_winner(self):
         start = self.frontend.index("sportSummary(breakdown, t)")
-        end = self.frontend.index("scoreColor(s)", start)
+        end = self.frontend.index("sportLimitDisclosure(category", start)
         summary = self.frontend[start:end]
         self.assertIn("this.sportWinner(breakdown)", summary)
         self.assertIn("winner.distance_m", summary)
@@ -1565,6 +1565,50 @@ class SportFrontendContentTests(unittest.TestCase):
             "d.categories.reduce((s, c) => s + (c.count || 0), 0)",
             self.frontend,
         )
+
+    def test_topn_disclosure_uses_total_count_and_rendered_sport_items(self):
+        helper_start = self.frontend.index(
+            "sportLimitDisclosure(category, visibleItems, t)")
+        helper_end = self.frontend.index("addressResultType(value, t)", helper_start)
+        helper = self.frontend[helper_start:helper_end]
+        self.assertIn("Number(category && category.count)", helper)
+        self.assertIn("Array.isArray(visibleItems) ? visibleItems.length : 0", helper)
+        self.assertIn("t.sportTopNDisclosure(total, shown)", helper)
+
+    def test_topn_disclosure_requires_more_total_than_shown(self):
+        self.assertIn(
+            "if (!Number.isFinite(total) || shown === 0 || total <= shown) return null;",
+            self.frontend,
+        )
+        self.assertIn(
+            "cat.key === 'sport' ? this.sportLimitDisclosure(cat, visibleItems, t) : null",
+            self.frontend,
+        )
+
+    def test_equal_or_inconsistent_counts_do_not_disclose(self):
+        self.assertIn("total <= shown", self.frontend)
+        self.assertNotIn("total < shown ? t.sportTopNDisclosure", self.frontend)
+
+    def test_zero_rendered_sport_locations_do_not_disclose(self):
+        self.assertIn("shown === 0", self.frontend)
+
+    def test_topn_disclosure_is_localized(self):
+        for text in (
+            "Toplam ' + total + ' spor noktası bulundu. İlk ' + shown + ' tanesi gösteriliyor.",
+            "total + ' sports locations found. Showing the first ' + shown + '.'",
+            "In totaal zijn ' + total + ' sportlocaties gevonden. De eerste ' + shown + ' worden getoond.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_existing_sport_list_and_map_inputs_remain_unsliced(self):
+        self.assertGreaterEqual(
+            self.frontend.count(
+                "cat.key === 'sport' ? this.visibleSportItems(cat) : cat.items"),
+            2,
+        )
+        self.assertIn("visibleItems.forEach((it, i) =>", self.frontend)
+        self.assertIn("rows: visibleItems.map((it, i) =>", self.frontend)
+        self.assertNotIn("visibleItems.slice(", self.frontend)
 
     def test_zero_winner_and_zero_alternative_states_are_localized(self):
         for text in (
