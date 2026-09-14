@@ -44,6 +44,7 @@ class FakeResponse:
 
 class AddressSuggestionsApiTests(unittest.TestCase):
     def setUp(self):
+        server.limiter.reset()
         self.client = server.app.test_client()
 
     def test_short_query_returns_no_suggestions_without_calling_provider(self):
@@ -198,6 +199,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
 
 class AnalyzeValidationApiTests(unittest.TestCase):
     def setUp(self):
+        server.limiter.reset()
         self.readiness_patch = patch.object(
             server, "_runtime_readiness", return_value=READY_RUNTIME)
         self.readiness_patch.start()
@@ -437,8 +439,14 @@ class RuntimeReadinessFrontendContentTests(unittest.TestCase):
     def test_503_uses_a_distinct_error_state_and_clears_stale_results(self):
         self.assertIn("status === 503", self.frontend)
         self.assertIn("j.error.code === 'service_unavailable'", self.frontend)
-        self.assertIn("unavailable ? 'unavailable' : 'server'", self.frontend)
-        self.assertIn("data: unavailable ? null : this.state.data", self.frontend)
+        self.assertIn(
+            "unavailable ? 'unavailable' : (rateLimited ? 'rateLimited' : 'server')",
+            self.frontend,
+        )
+        self.assertIn(
+            "data: (unavailable || rateLimited) ? null : this.state.data",
+            self.frontend,
+        )
         self.assertIn("refreshing: false", self.frontend)
         self.assertIn("unavailable: [t.errUnavailableT, t.errUnavailableD]",
                       self.frontend)
@@ -480,6 +488,7 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         cls.demo_dir.cleanup()
 
     def setUp(self):
+        server.limiter.reset()
         server._result_cache.clear()
         self.client = server.app.test_client()
 
@@ -635,6 +644,7 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
 
     @unittest.skipUnless(park_path.is_file(), "real Park cache unavailable")
     def test_five_locations_use_dedicated_scorer_through_preview_api(self):
+        server.limiter.reset()
         original_payload = server._category_payload
 
         def analysis(*, lat, lon, radius, topn, **_kwargs):

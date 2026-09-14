@@ -1082,6 +1082,7 @@
             errNotfoundT: 'Adres bulunamadı', errNotfoundD: 'Adresi posta koduyla birlikte yazmayı deneyin (örn. “Bondgenotenlaan 1, 3000 Leuven”).',
             errServerT: 'Sunucu hatası', errServerD: 'Analiz servisine şu anda ulaşılamıyor. Birkaç saniye sonra tekrar deneyin.',
             errUnavailableT: 'Analiz verileri kullanılamıyor', errUnavailableD: 'Analiz verileri şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
+            errRateLimitedT: 'Çok fazla istek', errRateLimitedD: 'Çok fazla istek gönderildi. Lütfen kısa bir süre sonra tekrar deneyin.',
             errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
             addressTypes: { building: 'Bina', street: 'Sokak', city: 'Şehir', amenity: 'Hizmet noktası', postcode: 'Posta kodu', suburb: 'Mahalle', district: 'İlçe' },
@@ -1155,7 +1156,7 @@
             sportDistanceRadius: 'Mesafeler kuş uçuşudur; gerçek giriş ve yürüme yolu farklı olabilir. Haritadaki 1 / 2,5 / 5 km seçimi Spor skorunu değiştirmez.',
             sportChoiceCount: count => count === 0 ? 'Ek puana katkı sağlayan başka spor seçeneği bulunamadı.' : (count === 1 ? '1 bağımsız spor seçeneği ek puana katkı sağlıyor.' : count + ' bağımsız spor seçeneği ek puana katkı sağlıyor.'),
             sportNearbyTitle: 'Yakındaki spor seçenekleri',
-            suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.',
+            suggestLoading: 'Adres önerileri yükleniyor…', suggestNone: 'Adres önerisi bulunamadı.', suggestError: 'Adres önerileri şu anda kullanılamıyor.', suggestRateLimited: 'Çok fazla istek gönderildi. Lütfen kısa bir süre sonra tekrar deneyin.',
             showingNearest: (count, shown) => count + ' yer bulundu — en yakın ' + shown + ' yer gösteriliyor',
             demoNotice: 'DEMO VERİSİ — sonuçlar yalnızca arayüz testi için sentetiktir.',
             foundLine: (dist, n) => dist + ' yarıçapında ' + n + ' nokta bulundu',
@@ -1196,6 +1197,7 @@
             errNotfoundT: 'Address not found', errNotfoundD: 'Try writing the address with its postal code (e.g. “Bondgenotenlaan 1, 3000 Leuven”).',
             errServerT: 'Server error', errServerD: 'The analysis service is currently unreachable. Please try again in a few seconds.',
             errUnavailableT: 'Analysis data unavailable', errUnavailableD: 'Analysis data is currently unavailable. Please try again later.',
+            errRateLimitedT: 'Too many requests', errRateLimitedD: 'Too many requests. Please try again shortly.',
             errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
             addressTypes: { building: 'Building', street: 'Street', city: 'City', amenity: 'Amenity', postcode: 'Postcode', suburb: 'Suburb', district: 'District' },
@@ -1269,7 +1271,7 @@
             sportDistanceRadius: 'Distances are straight-line; the actual entrance and walking route may differ. Changing the 1 / 2.5 / 5 km display radius does not change the Sport score.',
             sportChoiceCount: count => count === 0 ? 'No other sports option contributes extra points.' : (count === 1 ? '1 independent sports option contributes extra points.' : count + ' independent sports options contribute extra points.'),
             sportNearbyTitle: 'Nearby sports options',
-            suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.',
+            suggestLoading: 'Loading address suggestions…', suggestNone: 'No address suggestions found.', suggestError: 'Address suggestions are currently unavailable.', suggestRateLimited: 'Too many requests. Please try again shortly.',
             showingNearest: (count, shown) => count + ' places found — showing nearest ' + shown,
             demoNotice: 'DEMO DATA — results are synthetic and only for interface testing.',
             foundLine: (dist, n) => n + ' places found within ' + dist,
@@ -1310,6 +1312,7 @@
             errNotfoundT: 'Adres niet gevonden', errNotfoundD: 'Probeer het adres met postcode te schrijven (bijv. “Bondgenotenlaan 1, 3000 Leuven”).',
             errServerT: 'Serverfout', errServerD: 'De analysedienst is momenteel niet bereikbaar. Probeer het over enkele seconden opnieuw.',
             errUnavailableT: 'Analysegegevens niet beschikbaar', errUnavailableD: 'De analysegegevens zijn momenteel niet beschikbaar. Probeer het later opnieuw.',
+            errRateLimitedT: 'Te veel verzoeken', errRateLimitedD: 'Er zijn te veel verzoeken verzonden. Probeer het over een korte tijd opnieuw.',
             errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
             addressTypes: { building: 'Gebouw', street: 'Straat', city: 'Stad', amenity: 'Voorziening', postcode: 'Postcode', suburb: 'Buurt', district: 'Wijk' },
@@ -1383,7 +1386,7 @@
             sportDistanceRadius: 'Afstanden zijn hemelsbreed; de werkelijke ingang en wandelroute kunnen verschillen. Het wijzigen van de weergavestraal van 1 / 2,5 / 5 km verandert de Sportscore niet.',
             sportChoiceCount: count => count === 0 ? 'Geen andere sportoptie draagt bij aan extra punten.' : (count === 1 ? '1 onafhankelijke sportoptie draagt bij aan extra punten.' : count + ' onafhankelijke sportopties dragen bij aan extra punten.'),
             sportNearbyTitle: 'Sportopties in de buurt',
-            suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.',
+            suggestLoading: 'Adressuggesties laden…', suggestNone: 'Geen adressuggesties gevonden.', suggestError: 'Adressuggesties zijn momenteel niet beschikbaar.', suggestRateLimited: 'Er zijn te veel verzoeken verzonden. Probeer het over een korte tijd opnieuw.',
             showingNearest: (count, shown) => count + ' plekken gevonden — dichtstbijzijnde ' + shown + ' worden getoond',
             demoNotice: 'DEMOGEGEVENS — resultaten zijn synthetisch en alleen voor interfacetests.',
             foundLine: (dist, n) => n + ' plekken gevonden binnen ' + dist,
@@ -1609,14 +1612,15 @@
         this._ac = setTimeout(() => {
           const requestValue = query;
           fetch('/api/address-suggestions?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(this.state.lang))
-            .then(res => res.json().catch(() => ({})).then(j => ({ ok: res.ok, j })))
-            .then(({ ok, j }) => {
+            .then(res => res.json().catch(() => ({})).then(j => ({ ok: res.ok, status: res.status, j })))
+            .then(({ ok, status, j }) => {
               if (!this.addrEl || this.addrEl.value.trim() !== requestValue) return;
+              const rateLimited = status === 429 && j && j.error && j.error.code === 'rate_limited';
               const suggestions = ok && Array.isArray(j.suggestions) ? j.suggestions : [];
               this.setState({
                 suggestions,
                 suggestionIndex: -1,
-                suggestionMessage: suggestions.length ? '' : (j.message || (ok ? t.suggestNone : t.suggestError))
+                suggestionMessage: suggestions.length ? '' : (rateLimited ? t.suggestRateLimited : (j.message || (ok ? t.suggestNone : t.suggestError)))
               });
             })
             .catch(() => {
@@ -1680,9 +1684,10 @@
             if (reqId !== this._req) return;               // eski isteği yok say
             if (!ok) {
               const unavailable = status === 503 && j && j.error && j.error.code === 'service_unavailable';
+              const rateLimited = status === 429 && j && j.error && j.error.code === 'rate_limited';
               this.setState({ status: 'error', refreshing: false,
-                errorKind: status === 400 ? 'notfound' : (unavailable ? 'unavailable' : 'server'),
-                data: unavailable ? null : this.state.data });
+                errorKind: status === 400 ? 'notfound' : (unavailable ? 'unavailable' : (rateLimited ? 'rateLimited' : 'server')),
+                data: (unavailable || rateLimited) ? null : this.state.data });
               return;
             }
             const total = (j.categories || []).reduce((s, c) => s + (c.count || 0), 0);
@@ -2029,6 +2034,7 @@
           notfound: [t.errNotfoundT, t.errNotfoundD],
           server: [t.errServerT, t.errServerD],
           unavailable: [t.errUnavailableT, t.errUnavailableD],
+          rateLimited: [t.errRateLimitedT, t.errRateLimitedD],
           empty: [t.errEmptyT, t.errEmptyD]
         }[S.errorKind] || ['', ''];
 

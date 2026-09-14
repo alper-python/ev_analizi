@@ -3,6 +3,7 @@
 import logging
 import math
 import os
+from ipaddress import ip_address
 from pathlib import Path
 import tempfile
 import threading
@@ -10,6 +11,8 @@ import time
 
 import duckdb
 from flask import Flask, jsonify, request, send_from_directory
+from flask_limiter import Limiter
+from flask_limiter.errors import RateLimitExceeded
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -147,6 +150,24 @@ def _request_integer(value):
     if not number.is_integer():
         raise ValueError("integer required")
     return int(number)
+
+
+def _client_rate_limit_key():
+    """Use Render/Cloudflare's validated client address without trusting XFF."""
+    forwarded = request.headers.get("CF-Connecting-IP", "").strip()
+    candidates = (forwarded, request.remote_addr)
+    for candidate in candidates:
+        try:
+            return str(ip_address(candidate))
+        except (TypeError, ValueError):
+            continue
+    return "unknown-client"
+
+
+def _request_is_https():
+    """Recognize direct TLS or Render's single forwarded scheme value."""
+    return (request.is_secure
+            or request.headers.get("X-Forwarded-Proto", "").strip().casefold() == "https")
 
 
 def _existing_cache(env_name, filename):
@@ -309,8 +330,35 @@ DATA_MODE = "real"
 
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+# One process and one instance use cheap in-memory limits for V1. A future
+# multi-worker or multi-instance deployment must use shared storage such as Redis.
+limiter = Limiter(
+    key_func=_client_rate_limit_key,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+    headers_enabled=True,
+)
 _result_cache = {}
 _cache_lock = threading.Lock()
+
+
+@app.after_request
+def _add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), camera=(), microphone=()")
+    if _request_is_https():
+        response.headers["Strict-Transport-Security"] = "max-age=15552000"
+    return response
+
+
+@app.errorhandler(RateLimitExceeded)
+def _rate_limit_error(_error):
+    return _json_error(
+        "rate_limited", "Too many requests. Please try again shortly.", 429)
 
 
 def _runtime_asset_paths():
@@ -557,6 +605,7 @@ def health():
 
 
 @app.get("/api/address-suggestions")
+@limiter.limit("60 per minute")
 def address_suggestions_api():
     try:
         lang = str(request.args.get("lang", "en")).lower()
@@ -584,6 +633,7 @@ def address_suggestions_api():
 
 
 @app.post("/api/analyze")
+@limiter.limit("30 per minute")
 def analyze_api():
     try:
         return _analyze_api_response()

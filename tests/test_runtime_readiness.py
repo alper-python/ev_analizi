@@ -23,6 +23,7 @@ def _write(path, schema, row):
 
 class RuntimeReadinessApiTests(unittest.TestCase):
     def setUp(self):
+        server.limiter.reset()
         self.temp = tempfile.TemporaryDirectory(prefix="runtime-readiness-")
         self.root = Path(self.temp.name)
         self.paths = self._valid_assets()
