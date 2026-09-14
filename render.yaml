@@ -2,6 +2,7 @@ services:
   - type: web
     name: ev-analizi-be
     runtime: python
+    branch: feature/transit-score-v1
     region: frankfurt
     plan: 0.5c-512mb
     numInstances: 1
