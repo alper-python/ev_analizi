@@ -18,6 +18,9 @@ finally:
     sys.path.pop(0)
 
 
+READY_RUNTIME = {"ready": True, "components": {}}
+
+
 class FakeProvider(server.AddressSuggestionProvider):
     def __init__(self, suggestions=None):
         self.suggestions = suggestions or []
@@ -195,7 +198,13 @@ class AddressSuggestionsApiTests(unittest.TestCase):
 
 class AnalyzeValidationApiTests(unittest.TestCase):
     def setUp(self):
+        self.readiness_patch = patch.object(
+            server, "_runtime_readiness", return_value=READY_RUNTIME)
+        self.readiness_patch.start()
         self.client = server.app.test_client()
+
+    def tearDown(self):
+        self.readiness_patch.stop()
 
     def assert_json_error(self, response, status=400, code="invalid_request"):
         self.assertEqual(response.status_code, status)
@@ -411,6 +420,37 @@ class PopupSecurityContentTests(unittest.TestCase):
         self.assertNotIn("outerHTML", popup_helpers)
 
 
+class RuntimeReadinessFrontendContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_temporary_unavailable_copy_exists_in_all_languages(self):
+        for text in (
+            "Analiz verileri şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+            "Analysis data is currently unavailable. Please try again later.",
+            "De analysegegevens zijn momenteel niet beschikbaar. Probeer het later opnieuw.",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_503_uses_a_distinct_error_state_and_clears_stale_results(self):
+        self.assertIn("status === 503", self.frontend)
+        self.assertIn("j.error.code === 'service_unavailable'", self.frontend)
+        self.assertIn("unavailable ? 'unavailable' : 'server'", self.frontend)
+        self.assertIn("data: unavailable ? null : this.state.data", self.frontend)
+        self.assertIn("refreshing: false", self.frontend)
+        self.assertIn("unavailable: [t.errUnavailableT, t.errUnavailableD]",
+                      self.frontend)
+
+    def test_503_is_not_presented_as_address_not_found(self):
+        failure_start = self.frontend.index("if (!ok) {")
+        failure_end = self.frontend.index("const total =", failure_start)
+        failure_code = self.frontend[failure_start:failure_end]
+        self.assertIn("status === 400 ? 'notfound'", failure_code)
+        self.assertIn("unavailable ? 'unavailable'", failure_code)
+
+
 class RadiusReanalysisApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -427,6 +467,8 @@ class RadiusReanalysisApiTests(unittest.TestCase):
                 str(Path(cls.demo_nodes).with_name(
                     "be_sport_destinations.parquet"))),
             patch.object(server, "DATA_MODE", "demo"),
+            patch.object(server, "_runtime_readiness",
+                         return_value=READY_RUNTIME),
         ]
         for active_patch in cls.patches:
             active_patch.start()
@@ -616,7 +658,9 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
         with (patch.object(server, "PARK_PATH", str(self.park_path)),
               patch.object(server, "analyze_location", side_effect=analysis),
               patch.object(server, "_category_payload",
-                           side_effect=category_payload)):
+                           side_effect=category_payload),
+              patch.object(server, "_runtime_readiness",
+                           return_value=READY_RUNTIME)):
             for name, (lat, lon, expected) in self.locations.items():
                 scores = []
                 breakdowns = []

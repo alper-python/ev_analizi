@@ -1,6 +1,5 @@
 """Local-only Flask preview for the current analysis implementation."""
 
-import atexit
 import logging
 import math
 import os
@@ -26,6 +25,7 @@ from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
                             deduplicate_market_pois, market_type)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, deduplicate_school_pois,
                             school_score_components)
+from runtime_readiness import check_runtime_readiness
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -151,11 +151,14 @@ def _request_integer(value):
 
 def _existing_cache(env_name, filename):
     configured = os.environ.get(env_name)
-    candidates = ([Path(configured)] if configured else []) + [
+    if configured:
+        return str(Path(configured).expanduser().resolve())
+    candidates = [
         BASE_DIR / "cache" / filename,
         BASE_DIR.parent / "cache" / filename,
     ]
-    return next((str(path.resolve()) for path in candidates if path.is_file()), None)
+    return next((str(path.resolve()) for path in candidates if path.is_file()),
+                str(candidates[0].resolve()))
 
 
 def _offset(distance_m, bearing_degrees):
@@ -295,18 +298,45 @@ NODES_PATH = _existing_cache("POI_NODES", "be_poi.parquet")
 POLYS_PATH = _existing_cache("POI_POLYS", "be_poi_poly.parquet")
 PARK_PATH = _existing_cache("PARK_DESTINATIONS", "be_park_destinations.parquet")
 SPORT_PATH = _existing_cache("SPORT_DESTINATIONS", "be_sport_destinations.parquet")
-DATA_MODE = "real" if (NODES_PATH or POLYS_PATH) else "demo"
-_demo_dir = None
-if DATA_MODE == "demo":
-    _demo_dir, NODES_PATH, POLYS_PATH = _create_demo_caches()
-    PARK_PATH = str(Path(NODES_PATH).with_name("be_park_destinations.parquet"))
-    SPORT_PATH = str(Path(NODES_PATH).with_name("be_sport_destinations.parquet"))
-    atexit.register(_demo_dir.cleanup)
+TRANSIT_STOPS_PATH = _existing_cache(
+    "TRANSIT_SERVICE_STOPS", "be_transit_service_stops.parquet")
+TRANSIT_SUMMARY_PATH = _existing_cache(
+    "TRANSIT_SERVICE_SUMMARY", "be_transit_service_summary.parquet")
+RAIL_SERVICE_PATH = _existing_cache("RAIL_SERVICE", "be_rail_service.parquet")
+# Demo caches remain available as explicit test fixtures, but production runtime
+# selection never falls back to them when required Belgium data is unavailable.
+DATA_MODE = "real"
 
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 _result_cache = {}
 _cache_lock = threading.Lock()
+
+
+def _runtime_asset_paths():
+    return {
+        "poi_nodes": NODES_PATH,
+        "poi_polygons": POLYS_PATH,
+        "transit_service_stops": TRANSIT_STOPS_PATH,
+        "transit_service_summary": TRANSIT_SUMMARY_PATH,
+        "rail_service": RAIL_SERVICE_PATH,
+        "park_destinations": PARK_PATH,
+        "sport_destinations": SPORT_PATH,
+    }
+
+
+def _runtime_readiness(force=False):
+    """Single server boundary for cached runtime-data readiness."""
+    return check_runtime_readiness(_runtime_asset_paths(), force=force)
+
+
+def _log_unready_runtime(readiness):
+    for component, component_status in readiness["components"].items():
+        for asset, asset_status in component_status["assets"].items():
+            if not asset_status["ready"]:
+                LOGGER.error(
+                    "Runtime data unavailable: component=%s asset=%s status=%s detail=%s",
+                    component, asset, asset_status["status"], asset_status["detail"])
 
 
 def _value(value):
@@ -488,6 +518,9 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
 
     result = analyze_location(lat=lat, lon=lon, radius=radius, topn=topn,
                               nodes_path=NODES_PATH, polys_path=POLYS_PATH,
+                              transit_stops_path=TRANSIT_STOPS_PATH,
+                              transit_summary_path=TRANSIT_SUMMARY_PATH,
+                              rail_service_path=RAIL_SERVICE_PATH,
                               park_cache_path=PARK_PATH,
                               sport_cache_path=SPORT_PATH)
     with duckdb.connect() as con:
@@ -510,9 +543,17 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "data_mode": DATA_MODE,
-                    "cache": {"nodes": NODES_PATH, "polys": POLYS_PATH,
-                              "parks": PARK_PATH, "sports": SPORT_PATH}})
+    readiness = _runtime_readiness()
+    public_components = {
+        component: status["status"]
+        for component, status in readiness["components"].items()
+    }
+    if readiness["ready"]:
+        return jsonify({"status": "ok", "ready": True,
+                        "components": public_components})
+    _log_unready_runtime(readiness)
+    return jsonify({"status": "unavailable", "ready": False,
+                    "components": public_components}), 503
 
 
 @app.get("/api/address-suggestions")
@@ -549,7 +590,8 @@ def analyze_api():
     except FileNotFoundError:
         LOGGER.exception("Required analysis data is unavailable")
         return _json_error(
-            "service_unavailable", "Required analysis data is unavailable.", 503)
+            "service_unavailable",
+            "Required analysis data is temporarily unavailable.", 503)
     except Exception:
         LOGGER.exception("Unexpected analysis failure")
         return _json_error(
@@ -601,7 +643,18 @@ def _analyze_api_response():
         if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
             return _json_error("invalid_request", "Coordinates are out of range.", 400)
         display_address = address or f"({lat:.6f}, {lon:.6f})"
-    elif address:
+    elif not address:
+        return _json_error(
+            "invalid_request", "Provide an address or coordinates.", 400)
+
+    readiness = _runtime_readiness()
+    if not readiness["ready"]:
+        _log_unready_runtime(readiness)
+        return _json_error(
+            "service_unavailable",
+            "Required analysis data is temporarily unavailable.", 503)
+
+    if not has_lat:
         if DATA_MODE == "demo":
             lat, lon, display_address = DEMO_LAT, DEMO_LON, f"{address} — DEMO"
         else:
@@ -610,9 +663,6 @@ def _analyze_api_response():
             except RuntimeError:
                 return _json_error(
                     "address_not_found", "Address could not be geocoded.", 400)
-    else:
-        return _json_error(
-            "invalid_request", "Provide an address or coordinates.", 400)
 
     return jsonify(_run_preview_analysis(lat, lon, display_address, radius, topn, lang))
 
@@ -623,9 +673,8 @@ def index():
 
 
 if __name__ == "__main__":
-    print(f"[preview] data mode: {DATA_MODE}")
-    print(f"[preview] nodes: {NODES_PATH}")
-    print(f"[preview] polygons: {POLYS_PATH}")
-    print(f"[preview] parks: {PARK_PATH}")
-    print(f"[preview] sports: {SPORT_PATH}")
+    startup_readiness = _runtime_readiness(force=True)
+    print(f"[preview] runtime ready: {startup_readiness['ready']}")
+    if not startup_readiness["ready"]:
+        _log_unready_runtime(startup_readiness)
     app.run(host="127.0.0.1", port=5000, debug=False)

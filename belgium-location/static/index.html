@@ -1081,6 +1081,7 @@
             formErrAddr: 'Lütfen bir adres girin.', formErrCoord: 'Geçerli bir enlem ve boylam girin.',
             errNotfoundT: 'Adres bulunamadı', errNotfoundD: 'Adresi posta koduyla birlikte yazmayı deneyin (örn. “Bondgenotenlaan 1, 3000 Leuven”).',
             errServerT: 'Sunucu hatası', errServerD: 'Analiz servisine şu anda ulaşılamıyor. Birkaç saniye sonra tekrar deneyin.',
+            errUnavailableT: 'Analiz verileri kullanılamıyor', errUnavailableD: 'Analiz verileri şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
             errEmptyT: 'Bu yarıçapta sonuç bulunamadı', errEmptyD: 'Seçtiğiniz yarıçap içinde yeterli nokta bulunamadı. Yarıçapı büyütmeyi deneyin.',
             cats: { school: 'Okul', market: 'Market', health: 'Sağlık', transit: 'Ulaşım', park: 'Park', sport: 'Spor' },
             addressTypes: { building: 'Bina', street: 'Sokak', city: 'Şehir', amenity: 'Hizmet noktası', postcode: 'Posta kodu', suburb: 'Mahalle', district: 'İlçe' },
@@ -1194,6 +1195,7 @@
             formErrAddr: 'Please enter an address.', formErrCoord: 'Enter a valid latitude and longitude.',
             errNotfoundT: 'Address not found', errNotfoundD: 'Try writing the address with its postal code (e.g. “Bondgenotenlaan 1, 3000 Leuven”).',
             errServerT: 'Server error', errServerD: 'The analysis service is currently unreachable. Please try again in a few seconds.',
+            errUnavailableT: 'Analysis data unavailable', errUnavailableD: 'Analysis data is currently unavailable. Please try again later.',
             errEmptyT: 'No results within this radius', errEmptyD: 'Not enough places were found within the selected radius. Try a larger radius.',
             cats: { school: 'Schools', market: 'Groceries', health: 'Health', transit: 'Transit', park: 'Parks', sport: 'Sports' },
             addressTypes: { building: 'Building', street: 'Street', city: 'City', amenity: 'Amenity', postcode: 'Postcode', suburb: 'Suburb', district: 'District' },
@@ -1307,6 +1309,7 @@
             formErrAddr: 'Voer een adres in.', formErrCoord: 'Voer een geldige breedte- en lengtegraad in.',
             errNotfoundT: 'Adres niet gevonden', errNotfoundD: 'Probeer het adres met postcode te schrijven (bijv. “Bondgenotenlaan 1, 3000 Leuven”).',
             errServerT: 'Serverfout', errServerD: 'De analysedienst is momenteel niet bereikbaar. Probeer het over enkele seconden opnieuw.',
+            errUnavailableT: 'Analysegegevens niet beschikbaar', errUnavailableD: 'De analysegegevens zijn momenteel niet beschikbaar. Probeer het later opnieuw.',
             errEmptyT: 'Geen resultaten binnen deze straal', errEmptyD: 'Onvoldoende plekken gevonden binnen de gekozen straal. Probeer een grotere straal.',
             cats: { school: 'Scholen', market: 'Supermarkt', health: 'Zorg', transit: 'Vervoer', park: 'Parken', sport: 'Sport' },
             addressTypes: { building: 'Gebouw', street: 'Straat', city: 'Stad', amenity: 'Voorziening', postcode: 'Postcode', suburb: 'Buurt', district: 'Wijk' },
@@ -1676,7 +1679,10 @@
           .then(({ ok, status, j }) => {
             if (reqId !== this._req) return;               // eski isteği yok say
             if (!ok) {
-              this.setState({ status: 'error', refreshing: false, errorKind: status === 400 ? 'notfound' : 'server' });
+              const unavailable = status === 503 && j && j.error && j.error.code === 'service_unavailable';
+              this.setState({ status: 'error', refreshing: false,
+                errorKind: status === 400 ? 'notfound' : (unavailable ? 'unavailable' : 'server'),
+                data: unavailable ? null : this.state.data });
               return;
             }
             const total = (j.categories || []).reduce((s, c) => s + (c.count || 0), 0);
@@ -2022,6 +2028,7 @@
         const ERR = {
           notfound: [t.errNotfoundT, t.errNotfoundD],
           server: [t.errServerT, t.errServerD],
+          unavailable: [t.errUnavailableT, t.errUnavailableD],
           empty: [t.errEmptyT, t.errEmptyD]
         }[S.errorKind] || ['', ''];
 
