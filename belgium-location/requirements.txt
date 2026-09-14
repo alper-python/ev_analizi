@@ -31,3 +31,4 @@ tzdata==2025.2
 urllib3==2.5.0
 xyzservices==2025.4.0
 Flask==3.0.3
+gunicorn==26.2.0
