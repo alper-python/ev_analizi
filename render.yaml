@@ -9,6 +9,7 @@ services:
     buildCommand: pip install -r belgium-location/requirements-runtime.txt
     startCommand: gunicorn --chdir belgium-location --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 server:app
     autoDeployTrigger: off
+    healthCheckPath: /api/health
     envVars:
       - key: GEOAPIFY_API_KEY
         sync: false
