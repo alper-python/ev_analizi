@@ -125,14 +125,14 @@ def confidence_factor(row):
     return 0.85
 
 
-def destination_distance_m(query_lat, query_lon, row):
-    """Return ``(distance, method)`` using the locked evidence hierarchy."""
+def destination_distance_and_anchor(query_lat, query_lon, row):
+    """Return distance, anchor coordinates and method from one evidence path."""
     entrance_lat = _finite(row.get("entrance_lat"))
     entrance_lon = _finite(row.get("entrance_lon"))
     if entrance_lat is not None and entrance_lon is not None:
         return (_geodesic_distance_m(
             query_lat, query_lon, entrance_lat, entrance_lon),
-                "validated_entrance")
+                entrance_lat, entrance_lon, "validated_entrance")
 
     geometry_wkb = row.get("geometry_wkb")
     if geometry_wkb is not None:
@@ -143,12 +143,15 @@ def destination_distance_m(query_lat, query_lon, row):
                 if geometry.geom_type == "Point":
                     return (_geodesic_distance_m(
                         query_lat, query_lon, geometry.y, geometry.x),
+                            float(geometry.y), float(geometry.x),
                             "canonical_node")
                 if geometry.covers(query):
-                    return 0.0, "canonical_polygon_boundary"
+                    return (0.0, float(query_lat), float(query_lon),
+                            "canonical_polygon_boundary")
                 nearest = nearest_points(query, geometry)[1]
                 return (_geodesic_distance_m(
                     query_lat, query_lon, nearest.y, nearest.x),
+                        float(nearest.y), float(nearest.x),
                         "canonical_polygon_boundary")
         except Exception:
             pass
@@ -158,19 +161,29 @@ def destination_distance_m(query_lat, query_lon, row):
     if representative_lat is not None and representative_lon is not None:
         return (_geodesic_distance_m(
             query_lat, query_lon, representative_lat, representative_lon),
+                representative_lat, representative_lon,
                 "representative_point")
 
     component_geometries = row.get("owned_component_geometry_wkb") or []
     best = None
+    best_anchor = (None, None)
     for component_wkb in component_geometries:
         component_row = {"geometry_wkb": component_wkb}
-        distance, _method = destination_distance_m(
+        distance, anchor_lat, anchor_lon, _method = destination_distance_and_anchor(
             query_lat, query_lon, component_row)
         if math.isfinite(distance) and (best is None or distance < best):
             best = distance
+            best_anchor = (anchor_lat, anchor_lon)
     if best is not None:
-        return best, "owned_component_geometry"
-    return math.inf, "unavailable"
+        return best, best_anchor[0], best_anchor[1], "owned_component_geometry"
+    return math.inf, None, None, "unavailable"
+
+
+def destination_distance_m(query_lat, query_lon, row):
+    """Return ``(distance, method)`` using the locked evidence hierarchy."""
+    distance, _anchor_lat, _anchor_lon, method = destination_distance_and_anchor(
+        query_lat, query_lon, row)
+    return distance, method
 
 
 def destination_utility(row):

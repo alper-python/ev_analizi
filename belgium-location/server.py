@@ -313,6 +313,20 @@ def _value(value):
     return None if pd.isnull(value) else value
 
 
+def _valid_map_anchor(row):
+    """Return a safe optional presentation coordinate pair."""
+    try:
+        lat = float(_value(row.get("map_lat")))
+        lon = float(_value(row.get("map_lon")))
+    except (TypeError, ValueError):
+        return None
+    if (not math.isfinite(lat) or not math.isfinite(lon)
+            or not -90.0 <= lat <= 90.0
+            or not -180.0 <= lon <= 180.0):
+        return None
+    return lat, lon
+
+
 def _transit_display_type(row):
     """Classify display-only Transit infrastructure from preserved OSM tags."""
     def tag(column):
@@ -428,6 +442,10 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
             "walk_m": int(round(row["walk_m"])), "walk_min": int(round(row["walk_s"] / 60)),
             "drive_m": int(round(row["drive_m"])), "drive_min": int(round(row["drive_s"] / 60)),
         }
+        if category in {"park", "sport"}:
+            map_anchor = _valid_map_anchor(row)
+            if map_anchor is not None:
+                item["map_lat"], item["map_lon"] = map_anchor
         if category == "transit":
             item["display_type"] = _transit_display_type(row)
         elif category == "park":

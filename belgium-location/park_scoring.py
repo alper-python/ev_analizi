@@ -39,12 +39,12 @@ def park_distance_factor(distance_m):
         1.0, 1.0 - (distance - PARK_FULL_CREDIT_DISTANCE_M) / decay_span))
 
 
-def geometry_distance_m(lat, lon, geometry_wkb):
-    """Return the calibrated WGS84 distance to a cached point/footprint."""
+def geometry_distance_and_anchor(lat, lon, geometry_wkb):
+    """Return the calibrated distance and the geometry point producing it."""
     geometry = wkb.loads(bytes(geometry_wkb))
     query = Point(float(lon), float(lat))
     if geometry.covers(query):
-        return 0.0
+        return 0.0, float(lat), float(lon)
     if geometry.geom_type == "Point":
         lat1 = math.radians(float(lat))
         lat2 = math.radians(float(geometry.y))
@@ -53,11 +53,18 @@ def geometry_distance_m(lat, lon, geometry_wkb):
         haversine = (math.sin(delta_lat / 2.0) ** 2
                      + math.cos(lat1) * math.cos(lat2)
                      * math.sin(delta_lon / 2.0) ** 2)
-        return 2.0 * EARTH_RADIUS_M * math.asin(
+        distance = 2.0 * EARTH_RADIUS_M * math.asin(
             min(1.0, math.sqrt(haversine)))
+        return distance, float(geometry.y), float(geometry.x)
     nearest = nearest_points(query, geometry)[1]
-    return float(Geodesic.WGS84.Inverse(
+    distance = float(Geodesic.WGS84.Inverse(
         float(lat), float(lon), float(nearest.y), float(nearest.x))["s12"])
+    return distance, float(nearest.y), float(nearest.x)
+
+
+def geometry_distance_m(lat, lon, geometry_wkb):
+    """Return the calibrated WGS84 distance to a cached point/footprint."""
+    return geometry_distance_and_anchor(lat, lon, geometry_wkb)[0]
 
 
 def _identity(row):

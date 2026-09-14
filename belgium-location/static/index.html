@@ -1745,7 +1745,11 @@
             const straight = Number.isFinite(it.straight_m) ? it.straight_m : Math.round(it.walk_m / 1.25);
             const markerName = cat.key === 'park' ? this.parkName(it, t) : (cat.key === 'sport' ? this.sportName(it, t) : it.name);
             const markerType = cat.key === 'park' ? this.parkClassLabel(it.park_class, t) : (cat.key === 'sport' ? this.sportClassLabel(it.facility_class, t) : '');
-            const m = L.circleMarker([it.lat, it.lon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
+            const hasMapAnchor = (typeof it.map_lat === 'number' && Number.isFinite(it.map_lat) && it.map_lat >= -90 && it.map_lat <= 90
+              && typeof it.map_lon === 'number' && Number.isFinite(it.map_lon) && it.map_lon >= -180 && it.map_lon <= 180);
+            const markerLat = hasMapAnchor ? it.map_lat : it.lat;
+            const markerLon = hasMapAnchor ? it.map_lon : it.lon;
+            const m = L.circleMarker([markerLat, markerLon], { radius: 8, color: '#fff', weight: 2, fillColor: COL[cat.key], fillOpacity: 1 })
               .bindPopup(this.poiPopupContent(markerName, markerType, straight, it, t));
             m.addTo(g); this.mk[cat.key][i] = m;
           });

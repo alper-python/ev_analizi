@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 import pandas as pd
+from geographiclib.geodesic import Geodesic
 
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
@@ -647,6 +648,34 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
                     self.assertAlmostEqual(
                         breakdowns[0]["score_precise"], expected, places=8)
 
+    @unittest.skipUnless(park_path.is_file(), "real Park cache unavailable")
+    def test_gijmel_api_preserves_canonical_coordinates_and_adds_map_anchors(self):
+        with (patch.object(server, "PARK_PATH", str(self.park_path)),
+              server.duckdb.connect() as con):
+            category = server._category_payload(
+                con, "park", 51.0034977, 4.8405107, 2500, 20, 5.7)
+            canonical_rows = con.execute("""
+                SELECT display_name, representative_lat, representative_lon
+                FROM read_parquet(?)
+                WHERE display_name IN (
+                    'Langdonken', 'Natuurreservaat Langdonken',
+                    'Park Schoonhoven')
+            """, [str(self.park_path)]).fetchall()
+        canonical = {name: (lat, lon) for name, lat, lon in canonical_rows}
+        items = {item["name"]: item for item in category["items"]}
+        for name in canonical:
+            with self.subTest(name=name):
+                item = items[name]
+                self.assertEqual((item["lat"], item["lon"]), canonical[name])
+                self.assertTrue(-90 <= item["map_lat"] <= 90)
+                self.assertTrue(-180 <= item["map_lon"] <= 180)
+                anchor_distance = Geodesic.WGS84.Inverse(
+                    51.0034977, 4.8405107,
+                    item["map_lat"], item["map_lon"])["s12"]
+                self.assertAlmostEqual(anchor_distance, item["straight_m"],
+                                       delta=0.51)
+                self.assertLessEqual(anchor_distance, 2500)
+
 
 class RealBelgiumSportPreviewApiTests(unittest.TestCase):
     sport_path = SOURCE_DIR / "cache" / "be_sport_destinations.parquet"
@@ -686,6 +715,62 @@ class RealBelgiumSportPreviewApiTests(unittest.TestCase):
             [item["sport_id"] for payload in payloads
              for item in payload["items"]],
         )
+
+        lifestyle = next(
+            item for item in payloads[1]["items"]
+            if item["name"] == "Life Style Fitness Aarschot")
+        self.assertEqual(
+            (lifestyle["lat"], lifestyle["lon"]),
+            (50.98104, 4.837343000911913))
+        self.assertEqual(lifestyle["straight_m"], 2482)
+        anchor_distance = Geodesic.WGS84.Inverse(
+            51.0034977, 4.8405107,
+            lifestyle["map_lat"], lifestyle["map_lon"])["s12"]
+        self.assertAlmostEqual(anchor_distance, 2482.360550293, places=6)
+        self.assertLessEqual(anchor_distance, 2500)
+
+
+class MapAnchorFrontendContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_frontend_prefers_only_a_complete_valid_map_anchor(self):
+        for expression in (
+            "typeof it.map_lat === 'number'",
+            "Number.isFinite(it.map_lat)",
+            "it.map_lat >= -90 && it.map_lat <= 90",
+            "typeof it.map_lon === 'number'",
+            "Number.isFinite(it.map_lon)",
+            "it.map_lon >= -180 && it.map_lon <= 180",
+            "const markerLat = hasMapAnchor ? it.map_lat : it.lat",
+            "const markerLon = hasMapAnchor ? it.map_lon : it.lon",
+            "L.circleMarker([markerLat, markerLon]",
+        ):
+            self.assertIn(expression, self.frontend)
+        self.assertNotIn("L.circleMarker([it.map_lat, it.map_lon]",
+                         self.frontend)
+
+    def test_server_rejects_partial_nonfinite_and_out_of_range_anchors(self):
+        for row in (
+            {}, {"map_lat": 50.0},
+            {"map_lat": math.nan, "map_lon": 4.0},
+            {"map_lat": 91.0, "map_lon": 4.0},
+            {"map_lat": 50.0, "map_lon": 181.0},
+        ):
+            with self.subTest(row=row):
+                self.assertIsNone(server._valid_map_anchor(row))
+        self.assertEqual(server._valid_map_anchor({
+            "map_lat": 50.0, "map_lon": 4.0}), (50.0, 4.0))
+
+    def test_map_coordinates_are_limited_to_park_and_sport_payloads(self):
+        payload_start = self.frontend.index("visibleItems.forEach((it, i) =>")
+        payload_end = self.frontend.index("this.groups[cat.key] = g", payload_start)
+        marker_code = self.frontend[payload_start:payload_end]
+        self.assertIn("map_lat", marker_code)
+        server_source = (SOURCE_DIR / "server.py").read_text(encoding="utf-8")
+        self.assertIn('if category in {"park", "sport"}:', server_source)
 
 
 class ParkFrontendContentTests(unittest.TestCase):

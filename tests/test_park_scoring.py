@@ -9,7 +9,7 @@ import duckdb
 from geographiclib.geodesic import Geodesic
 import pyarrow as pa
 import pyarrow.parquet as pq
-from shapely.geometry import Point, box
+from shapely.geometry import MultiPolygon, Point, box
 
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
@@ -61,6 +61,10 @@ class ParkDistanceTests(unittest.TestCase):
         geometry = box(3.99, 49.99, 4.01, 50.01)
         self.assertEqual(
             park.geometry_distance_m(TEST_LAT, TEST_LON, geometry.wkb), 0.0)
+        distance, anchor_lat, anchor_lon = park.geometry_distance_and_anchor(
+            TEST_LAT, TEST_LON, geometry.wkb)
+        self.assertEqual((distance, anchor_lat, anchor_lon),
+                         (0.0, TEST_LAT, TEST_LON))
 
     def test_point_geometry_uses_haversine_distance(self):
         geometry = Point(TEST_LON, TEST_LAT + 0.001)
@@ -79,6 +83,24 @@ class ParkDistanceTests(unittest.TestCase):
             geometry.centroid.x)["s12"]
         self.assertGreater(boundary, 0.0)
         self.assertLess(boundary, centroid)
+
+    def test_large_multipolygon_returns_the_distance_producing_anchor(self):
+        near = box(4.01, 49.999, 4.02, 50.001)
+        far = box(4.04, 49.999, 4.08, 50.001)
+        geometry = MultiPolygon([near, far])
+        distance, anchor_lat, anchor_lon = park.geometry_distance_and_anchor(
+            TEST_LAT, TEST_LON, geometry.wkb)
+        self.assertAlmostEqual(distance, park.geometry_distance_m(
+            TEST_LAT, TEST_LON, geometry.wkb), places=12)
+        self.assertTrue(geometry.covers(Point(anchor_lon, anchor_lat)))
+        self.assertAlmostEqual(
+            Geodesic.WGS84.Inverse(
+                TEST_LAT, TEST_LON, anchor_lat, anchor_lon)["s12"],
+            distance, places=9)
+        representative_distance = Geodesic.WGS84.Inverse(
+            TEST_LAT, TEST_LON, geometry.representative_point().y,
+            geometry.representative_point().x)["s12"]
+        self.assertLess(distance, representative_distance)
 
 
 class ParkFormulaTests(unittest.TestCase):
@@ -245,13 +267,16 @@ class ParkDuckDBIntegrationTests(unittest.TestCase):
 
     def test_query_uses_geometry_and_drops_wkb_from_results(self):
         with (duckdb.connect() as con,
-              mock.patch.object(app, "geometry_distance_m",
-                                wraps=app.geometry_distance_m) as distance):
+              mock.patch.object(app, "geometry_distance_and_anchor",
+                                wraps=app.geometry_distance_and_anchor) as distance):
             rows = app.query_park_candidates(
                 con, str(self.path), TEST_LAT, TEST_LON, 1000)
         self.assertEqual(len(rows), 3)
         self.assertEqual(distance.call_count, 3)
         self.assertTrue(all("geometry_wkb" not in row for row in rows))
+        self.assertTrue(all(math.isfinite(row["map_lat"])
+                            and math.isfinite(row["map_lon"])
+                            for row in rows))
 
     def test_missing_cache_fails_clearly(self):
         missing = str(Path(self.temp.name) / "missing.parquet")
@@ -301,6 +326,27 @@ class RealBelgiumParkRegressionTests(unittest.TestCase):
                     actual = (breakdowns[0]["winner"]["display_name"]
                               or breakdowns[0]["winner"]["park_id"])
                     self.assertEqual(actual, winner)
+
+    @unittest.skipUnless(path.is_file(), "real Park cache unavailable")
+    def test_gijmel_large_polygon_anchors_match_existing_distances(self):
+        expected = {
+            "Langdonken": 2185.473173,
+            "Natuurreservaat Langdonken": 2259.112112,
+            "Park Schoonhoven": 2451.788778,
+        }
+        with duckdb.connect() as con:
+            frame, _score, _count, _nearest, _breakdown = app.analyze_park(
+                con, str(self.path), 51.0034977, 4.8405107, 2500, 20)
+        rows = {row["display_name"]: row for row in frame.to_dict("records")}
+        for name, distance in expected.items():
+            with self.subTest(name=name):
+                row = rows[name]
+                self.assertAlmostEqual(row["d_lin"], distance, places=5)
+                anchor_distance = Geodesic.WGS84.Inverse(
+                    51.0034977, 4.8405107,
+                    row["map_lat"], row["map_lon"])["s12"]
+                self.assertAlmostEqual(anchor_distance, row["d_lin"], places=8)
+                self.assertLessEqual(anchor_distance, 2500.0)
 
 
 if __name__ == "__main__":

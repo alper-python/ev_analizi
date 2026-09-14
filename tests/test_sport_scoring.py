@@ -8,7 +8,7 @@ import duckdb
 from geographiclib.geodesic import Geodesic
 import pyarrow as pa
 import pyarrow.parquet as pq
-from shapely.geometry import Point, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 
 
 SOURCE_DIR = Path(__file__).resolve().parents[1] / "belgium-location"
@@ -19,6 +19,7 @@ try:
     from sport_scoring import (
         FACILITY_FACTORS,
         confidence_factor,
+        destination_distance_and_anchor,
         destination_distance_m,
         destination_utility,
         facility_factor,
@@ -182,6 +183,10 @@ class SportGeometryTests(unittest.TestCase):
         expected = Geodesic.WGS84.Inverse(51.001, 4.84, 51.0, 4.84)["s12"]
         self.assertAlmostEqual(distance, expected)
         self.assertEqual(method, "canonical_node")
+        result = destination_distance_and_anchor(
+            51.001, 4.84, {"geometry_wkb": geometry.wkb})
+        self.assertEqual(result[1:], (51.0, 4.84, "canonical_node"))
+        self.assertAlmostEqual(result[0], distance)
 
     def test_polygon_boundary_and_inside_distance(self):
         polygon = Polygon([(4.84, 51.0), (4.842, 51.0),
@@ -190,10 +195,33 @@ class SportGeometryTests(unittest.TestCase):
             51.001, 4.841, {"geometry_wkb": polygon.wkb})
         self.assertEqual(inside, 0.0)
         self.assertEqual(method, "canonical_polygon_boundary")
+        result = destination_distance_and_anchor(
+            51.001, 4.841, {"geometry_wkb": polygon.wkb})
+        self.assertEqual(result, (0.0, 51.001, 4.841,
+                                  "canonical_polygon_boundary"))
         outside, method = destination_distance_m(
             51.003, 4.841, {"geometry_wkb": polygon.wkb})
         self.assertGreater(outside, 100)
         self.assertEqual(method, "canonical_polygon_boundary")
+        result = destination_distance_and_anchor(
+            51.003, 4.841, {"geometry_wkb": polygon.wkb})
+        self.assertAlmostEqual(result[0], outside)
+        self.assertTrue(polygon.covers(Point(result[2], result[1])))
+        self.assertAlmostEqual(Geodesic.WGS84.Inverse(
+            51.003, 4.841, result[1], result[2])["s12"], outside)
+
+    def test_multipolygon_anchor_uses_nearest_component(self):
+        near = Polygon([(4.84, 51.0), (4.842, 51.0),
+                        (4.842, 51.002), (4.84, 51.002)])
+        far = Polygon([(4.86, 51.0), (4.862, 51.0),
+                       (4.862, 51.002), (4.86, 51.002)])
+        geometry = MultiPolygon([near, far])
+        distance, anchor_lat, anchor_lon, method = destination_distance_and_anchor(
+            51.003, 4.841, {"geometry_wkb": geometry.wkb})
+        self.assertEqual(method, "canonical_polygon_boundary")
+        self.assertTrue(near.covers(Point(anchor_lon, anchor_lat)))
+        self.assertAlmostEqual(Geodesic.WGS84.Inverse(
+            51.003, 4.841, anchor_lat, anchor_lon)["s12"], distance)
 
     def test_validated_entrance_precedes_polygon_and_representative(self):
         polygon = Point(4.84, 51.0).buffer(0.01)
@@ -204,6 +232,13 @@ class SportGeometryTests(unittest.TestCase):
         })
         self.assertGreater(distance, 100)
         self.assertEqual(method, "validated_entrance")
+        result = destination_distance_and_anchor(51.0, 4.84, {
+            "entrance_lat": 51.001, "entrance_lon": 4.84,
+            "geometry_wkb": polygon.wkb,
+            "representative_lat": 51.0, "representative_lon": 4.84,
+        })
+        self.assertEqual(result[1:], (51.001, 4.84, "validated_entrance"))
+        self.assertAlmostEqual(result[0], distance)
 
     def test_representative_then_owned_component_fallback(self):
         distance, method = destination_distance_m(51.0, 4.84, {
@@ -212,12 +247,25 @@ class SportGeometryTests(unittest.TestCase):
         })
         self.assertGreater(distance, 100)
         self.assertEqual(method, "representative_point")
+        representative = destination_distance_and_anchor(51.0, 4.84, {
+            "geometry_wkb": b"bad", "representative_lat": 51.001,
+            "representative_lon": 4.84,
+        })
+        self.assertEqual(representative[1:],
+                         (51.001, 4.84, "representative_point"))
         distance, method = destination_distance_m(51.0, 4.84, {
             "geometry_wkb": b"bad",
             "owned_component_geometry_wkb": [Point(4.84, 51.002).wkb],
         })
         self.assertGreater(distance, 200)
         self.assertEqual(method, "owned_component_geometry")
+        component = destination_distance_and_anchor(51.0, 4.84, {
+            "geometry_wkb": b"bad",
+            "owned_component_geometry_wkb": [Point(4.84, 51.002).wkb],
+        })
+        self.assertEqual(component[1:],
+                         (51.002, 4.84, "owned_component_geometry"))
+        self.assertAlmostEqual(component[0], distance)
 
 
 def cache_row(identifier, lat, lon, *, name, facility_class, eligible=True,

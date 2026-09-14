@@ -8,11 +8,13 @@ from health_scoring import (HEALTH_HOSPITAL_RADIUS_M, HEALTH_LOCAL_RADIUS_M,
                             health_score_components)
 from market_scoring import (MARKET_SCORING_RADIUS_M, calc_market_score,
                             deduplicate_market_pois, market_type)
-from park_scoring import (PARK_SCORING_RADIUS_M, geometry_distance_m,
+from park_scoring import (PARK_SCORING_RADIUS_M,
+                          geometry_distance_and_anchor,
                           park_score_components)
 from school_scoring import (SCHOOL_SCORING_RADIUS_M, calc_school_score,
                             deduplicate_school_pois)
-from sport_scoring import (SPORT_SCORING_RADIUS_M, destination_distance_m,
+from sport_scoring import (SPORT_SCORING_RADIUS_M,
+                           destination_distance_and_anchor,
                            sport_score_components)
 from transit_scoring import (LOCAL_SCORING_RADIUS_M, RADIUS_EPSILON_M,
                              RAIL_SCORING_RADIUS_M, transit_score_components)
@@ -481,9 +483,12 @@ def query_park_candidates(con, park_path, lat, lon, radius_m):
     candidates = con.execute(query).df().to_dict("records")
     output = []
     for candidate in candidates:
-        distance = geometry_distance_m(lat, lon, candidate["geometry_wkb"])
+        distance, map_lat, map_lon = geometry_distance_and_anchor(
+            lat, lon, candidate["geometry_wkb"])
         if distance <= float(radius_m):
             candidate["distance_m"] = distance
+            candidate["map_lat"] = map_lat
+            candidate["map_lon"] = map_lon
             candidate.pop("geometry_wkb", None)
             output.append(candidate)
     return output
@@ -574,10 +579,13 @@ def query_sport_candidates(con, sport_path, lat, lon, radius_m):
     candidates = con.execute(query).df().to_dict("records")
     output = []
     for candidate in candidates:
-        distance, method = destination_distance_m(lat, lon, candidate)
+        distance, map_lat, map_lon, method = destination_distance_and_anchor(
+            lat, lon, candidate)
         if distance <= float(radius_m):
             candidate["distance_m"] = float(distance)
             candidate["distance_method"] = method
+            candidate["map_lat"] = map_lat
+            candidate["map_lon"] = map_lon
             candidate["sports"] = list(candidate.get("sports"))
             candidate["direct_sports"] = list(candidate.get("direct_sports"))
             candidate["component_sports"] = list(
