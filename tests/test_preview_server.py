@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import math
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -195,6 +196,120 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             }
         })
         self.assertNotIn("private upstream detail", response.get_data(as_text=True))
+
+
+class TransitSourceApiTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="transit-source-api-")
+        self.root = Path(self.temp.name)
+        self.summary_path = self.root / "summary.parquet"
+        self.rail_path = self.root / "rail.parquet"
+        self.client = server.app.test_client()
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def write_parquet(self, path, document=None, raw=None):
+        table = server.pa.table({"fixture": [1]})
+        if raw is not None or document is not None:
+            payload = raw if raw is not None else json.dumps(document).encode("utf-8")
+            table = table.replace_schema_metadata({
+                server.TRANSIT_PROVENANCE_METADATA_KEY: payload,
+            })
+        server.pq.write_table(table, path)
+
+    def get_sources(self):
+        with (patch.object(server, "TRANSIT_SUMMARY_PATH", str(self.summary_path)),
+              patch.object(server, "RAIL_SERVICE_PATH", str(self.rail_path))):
+            response = self.client.get("/api/data-sources")
+        return response, response.get_json()
+
+    @staticmethod
+    def source(key, operator, updated_at):
+        return {
+            "operator": operator,
+            "source_provider": "Belgian Mobility Open Data Portal",
+            "source_url": "https://example.invalid/" + key,
+            "feed_version": key + "-v1",
+            "dataset_updated_at": updated_at,
+            "retrieved_at": "2026-09-15T12:00:00Z",
+            "etag": 'W/"private-etag"',
+            "filesystem_path": "C:\\private\\feed.zip",
+            "downloaded": True,
+        }
+
+    def test_valid_metadata_returns_four_sources_in_stable_order(self):
+        local = {
+            "delijn": self.source("delijn", "De Lijn", "2026-09-11T01:02:03Z"),
+            "stib": self.source("stib", "STIB/MIVB", "2026-09-12T02:03:04Z"),
+            "tec": self.source("tec", "TEC", "2026-09-13T03:04:05Z"),
+        }
+        rail = {"sncb": self.source(
+            "sncb", "SNCB/NMBS", "2026-09-14T04:05:06Z")}
+        self.write_parquet(
+            self.summary_path, {"schema_version": 1, "sources": local})
+        self.write_parquet(
+            self.rail_path, {"schema_version": 1, "sources": rail})
+
+        response, payload = self.get_sources()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["key"] for row in payload["transit"]],
+                         ["delijn", "stib", "tec", "sncb"])
+        self.assertEqual(
+            [row["dataset_updated_at"] for row in payload["transit"]],
+            ["2026-09-11T01:02:03Z", "2026-09-12T02:03:04Z",
+             "2026-09-13T03:04:05Z", "2026-09-14T04:05:06Z"])
+
+    def test_private_metadata_fields_are_not_exposed(self):
+        local = {key: self.source(key, operator, "2026-09-14T03:08:31Z")
+                 for key, operator in (("delijn", "De Lijn"),
+                                       ("stib", "STIB/MIVB"), ("tec", "TEC"))}
+        self.write_parquet(
+            self.summary_path, {"schema_version": 1, "sources": local})
+        self.write_parquet(self.rail_path, {
+            "schema_version": 1,
+            "sources": {"sncb": self.source(
+                "sncb", "SNCB/NMBS", "2026-09-14T03:08:31Z")},
+        })
+
+        _response, payload = self.get_sources()
+        body = json.dumps(payload)
+
+        self.assertNotIn("etag", body.casefold())
+        self.assertNotIn("retrieved_at", body)
+        self.assertNotIn("filesystem", body.casefold())
+        self.assertNotIn("private", body.casefold())
+
+    def test_missing_metadata_returns_known_sources_with_null_dates(self):
+        self.write_parquet(self.summary_path)
+        self.write_parquet(self.rail_path)
+
+        response, payload = self.get_sources()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["transit"]), 4)
+        self.assertEqual([row["operator"] for row in payload["transit"]],
+                         ["De Lijn", "STIB/MIVB", "TEC", "SNCB/NMBS"])
+        self.assertTrue(all(row["dataset_updated_at"] is None
+                            for row in payload["transit"]))
+
+    def test_malformed_or_wrong_version_metadata_remains_controlled(self):
+        cases = (
+            (b"{malformed", b"[]"),
+            (json.dumps({"schema_version": 2, "sources": {}}).encode("utf-8"),
+             json.dumps({"schema_version": 0, "sources": {}}).encode("utf-8")),
+        )
+        for summary_raw, rail_raw in cases:
+            with self.subTest(summary_raw=summary_raw, rail_raw=rail_raw):
+                self.write_parquet(self.summary_path, raw=summary_raw)
+                self.write_parquet(self.rail_path, raw=rail_raw)
+                response, payload = self.get_sources()
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(payload["transit"]), 4)
+                self.assertTrue(all(row["dataset_updated_at"] is None
+                                    for row in payload["transit"]))
+                self.assertNotIn("Traceback", response.get_data(as_text=True))
 
 
 class AnalyzeValidationApiTests(unittest.TestCase):
@@ -1720,12 +1835,46 @@ class BasemapAttributionContentTests(unittest.TestCase):
         ):
             self.assertIn(provider, self.frontend)
         for feed_wording in (
-            "GTFS ve açık veri akışlarına",
-            "GTFS and open-data feeds",
-            "GTFS- en opendatafeeds",
+            "Statik GTFS verileri Belgian Mobility Open Data Portal",
+            "Static GTFS data is obtained through the Belgian Mobility Open Data Portal.",
+            "Statische GTFS-gegevens worden verkregen via het Belgian Mobility Open Data Portal.",
         ):
             self.assertIn(feed_wording, self.frontend)
         self.assertNotRegex(self.frontend, r"GTFS.{0,80}20\d{2}")
+
+    def test_transit_source_dates_and_operators_are_rendered_from_runtime_data(self):
+        for source in (
+            "fetch('/api/data-sources')",
+            "payload && Array.isArray(payload.transit) ? payload.transit : []",
+            "this.setState({ transitSources: transit })",
+            "source.dataset_updated_at",
+            "'Source: ' + operator + ' – Open Data – ' + date",
+            '<sc-for list="{{ transitSources }}" as="source"',
+            "{{ source.attribution }}",
+        ):
+            self.assertIn(source, self.frontend)
+        self.assertIn("if (this._dataSourcesRequested) return;", self.frontend)
+
+    def test_transit_source_fallback_is_localized_and_fetch_failure_is_safe(self):
+        for wording in (
+            "Güncelleme tarihi mevcut değil",
+            "Datum van gegevensupdate niet beschikbaar",
+            "Data update date unavailable",
+        ):
+            self.assertIn(wording, self.frontend)
+        self.assertIn(".catch(() => this.setState({ transitSources: [] }))",
+                      self.frontend)
+        self.assertIn("this.loadDataSources(); this.setState({ dataSourcesOpen: true })",
+                      self.frontend)
+
+    def test_existing_non_transit_source_links_remain_intact(self):
+        for link in (
+            'href="https://www.openstreetmap.org/copyright"',
+            'href="https://stadiamaps.com/attribution/"',
+            'href="https://openmaptiles.org/"',
+            'href="https://www.geoapify.com/"',
+        ):
+            self.assertIn(link, self.frontend)
 
     def test_sources_modal_and_warning_have_responsive_overflow_guards(self):
         self.assertIn("width: min(520px, calc(100vw - 24px))", self.frontend)

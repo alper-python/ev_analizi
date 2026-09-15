@@ -1,5 +1,7 @@
 """Local-only Flask preview for the current analysis implementation."""
 
+from datetime import datetime
+import json
 import logging
 import math
 import os
@@ -8,6 +10,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+from urllib.parse import urlparse
 
 import duckdb
 from flask import Flask, jsonify, request, send_from_directory
@@ -36,6 +39,15 @@ LOGGER = logging.getLogger(__name__)
 DEMO_LAT, DEMO_LON = 50.876182, 4.680335
 SUPPORTED_LANGS = ("tr", "en", "nl")
 MAX_ADDRESS_LENGTH = 300
+TRANSIT_PROVENANCE_METADATA_KEY = b"ev_analizi.transit_source_provenance_v1"
+TRANSIT_SOURCE_PROVIDER = "Belgian Mobility Open Data Portal"
+TRANSIT_SOURCE_PORTAL_URL = "https://data.belgianmobility.io/"
+TRANSIT_SOURCE_IDENTITIES = (
+    ("delijn", "De Lijn", "local"),
+    ("stib", "STIB/MIVB", "local"),
+    ("tec", "TEC", "local"),
+    ("sncb", "SNCB/NMBS", "rail"),
+)
 LABELS = {
     "tr": {"school": "Okul", "market": "Market", "health": "Sağlık", "transit": "Ulaşım", "park": "Park", "sport": "Spor"},
     "en": {"school": "School", "market": "Groceries", "health": "Health", "transit": "Transit", "park": "Park", "sport": "Sports"},
@@ -378,6 +390,79 @@ def _runtime_readiness(force=False):
     return check_runtime_readiness(_runtime_asset_paths(), force=force)
 
 
+def _optional_public_string(value, maximum=300):
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text if text and len(text) <= maximum else None
+
+
+def _public_source_url(value):
+    text = _optional_public_string(value, maximum=1000)
+    if text is None:
+        return None
+    parsed = urlparse(text)
+    return text if parsed.scheme in {"http", "https"} and parsed.netloc else None
+
+
+def _public_dataset_timestamp(value):
+    text = _optional_public_string(value, maximum=100)
+    if text is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return text if parsed.tzinfo is not None else None
+
+
+def _read_transit_provenance(path, source_group):
+    """Read optional builder metadata without affecting runtime readiness."""
+    try:
+        metadata = pq.ParquetFile(path).schema_arrow.metadata or {}
+        raw = metadata.get(TRANSIT_PROVENANCE_METADATA_KEY)
+        if raw is None:
+            return {}
+        document = json.loads(raw.decode("utf-8"))
+        if (not isinstance(document, dict)
+                or document.get("schema_version") != 1
+                or not isinstance(document.get("sources"), dict)):
+            return {}
+        return document["sources"]
+    except Exception as exc:
+        LOGGER.warning(
+            "Transit source provenance unavailable: group=%s error=%s",
+            source_group, type(exc).__name__)
+        return {}
+
+
+def _public_transit_sources():
+    source_documents = {
+        "local": _read_transit_provenance(TRANSIT_SUMMARY_PATH, "local"),
+        "rail": _read_transit_provenance(RAIL_SERVICE_PATH, "rail"),
+    }
+    result = []
+    for key, fallback_operator, source_group in TRANSIT_SOURCE_IDENTITIES:
+        raw = source_documents[source_group].get(key, {})
+        if not isinstance(raw, dict):
+            raw = {}
+        result.append({
+            "key": key,
+            "operator": (_optional_public_string(raw.get("operator"), 100)
+                         or fallback_operator),
+            "source_provider": (
+                _optional_public_string(raw.get("source_provider"), 200)
+                or TRANSIT_SOURCE_PROVIDER),
+            "source_url": (_public_source_url(raw.get("source_url"))
+                           or TRANSIT_SOURCE_PORTAL_URL),
+            "feed_version": _optional_public_string(
+                raw.get("feed_version"), 200),
+            "dataset_updated_at": _public_dataset_timestamp(
+                raw.get("dataset_updated_at")),
+        })
+    return result
+
+
 def _log_unready_runtime(readiness):
     for component, component_status in readiness["components"].items():
         for asset, asset_status in component_status["assets"].items():
@@ -602,6 +687,11 @@ def health():
     _log_unready_runtime(readiness)
     return jsonify({"status": "unavailable", "ready": False,
                     "components": public_components}), 503
+
+
+@app.get("/api/data-sources")
+def data_sources_api():
+    return jsonify({"transit": _public_transit_sources()})
 
 
 @app.get("/api/address-suggestions")
