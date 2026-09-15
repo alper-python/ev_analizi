@@ -1257,7 +1257,7 @@ class ParkFrontendContentTests(unittest.TestCase):
 
     def test_collapsed_summary_uses_backend_winner_not_generic_nearest(self):
         start = self.frontend.index("parkSummary(breakdown, t)")
-        end = self.frontend.index("scoreColor(s)", start)
+        end = self.frontend.index("fmtSportValue(value)", start)
         summary = self.frontend[start:end]
         self.assertIn("breakdown.winner", summary)
         self.assertIn("winner.distance_m", summary)
@@ -1660,7 +1660,7 @@ class TransitExplanationContentTests(unittest.TestCase):
 
     def test_collapsed_summary_uses_scoring_distances_not_legacy_fields(self):
         start = self.frontend.index("transitSummary(breakdown, t)")
-        end = self.frontend.index("scoreColor(s)", start)
+        end = self.frontend.index("fmtParkValue(value)", start)
         summary = self.frontend[start:end]
         self.assertIn("breakdown.best_local_distance_m", summary)
         self.assertIn("breakdown.best_rail_distance_m", summary)
