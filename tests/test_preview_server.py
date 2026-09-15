@@ -881,6 +881,43 @@ class PrivacyNoticeContentTests(unittest.TestCase):
         )
 
 
+class PublicUiPolishContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_print_button_labels_match_browser_print_behavior(self):
+        for label in (
+            "print: 'Yazdır / PDF kaydet'",
+            "print: 'Afdrukken / opslaan als PDF'",
+            "print: 'Print / Save as PDF'",
+        ):
+            self.assertIn(label, self.frontend)
+        self.assertIn('<button onClick="{{ onPrint }}"', self.frontend)
+        self.assertIn("onPrint: () => window.print()", self.frontend)
+
+    def test_old_share_labels_are_removed(self):
+        for old_label in (
+            "Raporu paylaş / yazdır",
+            "Rapport delen / afdrukken",
+            "Share / print report",
+        ):
+            self.assertNotIn(old_label, self.frontend)
+
+    def test_public_comparison_placeholder_and_translations_are_removed(self):
+        for removed in (
+            "{{ t.cmp1 }}", "{{ t.cmp2 }}", "cmp1:", "cmp2:",
+            "Karşılaştırma — yakında",
+            "2–3 adresi yan yana kıyaslayın (v2)",
+            "Comparison — coming soon",
+            "Compare 2–3 addresses side by side (v2)",
+            "Vergelijking — binnenkort",
+            "Vergelijk 2–3 adressen naast elkaar (v2)",
+        ):
+            self.assertNotIn(removed, self.frontend)
+
+
 class RadiusReanalysisApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
