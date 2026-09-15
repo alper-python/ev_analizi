@@ -22,7 +22,8 @@ import time
 import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from io import TextIOWrapper
 import zipfile
 
@@ -42,6 +43,8 @@ OPERATOR_LABELS = {
     "delijn": "De Lijn", "stib": "STIB/MIVB", "tec": "TEC",
     "sncb": "SNCB/NMBS",
 }
+SOURCE_PROVIDER = "Belgian Mobility Open Data Portal"
+PROVENANCE_METADATA_KEY = "ev_analizi.transit_source_provenance_v1"
 LOCAL_ROUTE_MODES = {"0": "TRAM", "1": "METRO", "3": "BUS"}
 LOCAL_THRESHOLDS_M = {"delijn": 100.0, "stib": 75.0, "tec": 50.0}
 STIB_PARENT_ABSORPTION_M = 150.0
@@ -435,14 +438,38 @@ def _feed_metadata(zip_path):
     }
 
 
+def _utc_iso(value):
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z")
+
+
+def _parse_last_modified(value):
+    if not value:
+        return None
+    try:
+        parsed = parsedate_to_datetime(str(value))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return _utc_iso(parsed)
+
+
 def _download(url, target, session=requests):
     response = session.get(url, stream=True, timeout=120)
     response.raise_for_status()
+    retrieved_at = _utc_iso(datetime.now(timezone.utc))
     with target.open("wb") as output:
         for chunk in response.iter_content(chunk_size=1024 * 1024):
             if chunk:
                 output.write(chunk)
-    return target.stat().st_size
+    etag = str(response.headers.get("ETag") or "").strip() or None
+    return {
+        "dataset_updated_at": _parse_last_modified(
+            response.headers.get("Last-Modified")),
+        "retrieved_at": retrieved_at,
+        "etag": etag,
+    }
 
 
 def _extract_required(zip_path, target):
@@ -680,8 +707,20 @@ def _process_rail(connection, metadata, start, end):
     return output, len(rows)
 
 
-def _write_parquet(rows, schema, path):
+def _provenance_metadata(sources):
+    document = {"schema_version": 1, "sources": sources}
+    payload = json.dumps(
+        document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return {PROVENANCE_METADATA_KEY.encode("utf-8"): payload}
+
+
+def _write_parquet(rows, schema, path, file_metadata=None):
     table = pa.Table.from_pylist(rows, schema=schema)
+    if file_metadata:
+        metadata = dict(table.schema.metadata or {})
+        metadata.update(file_metadata)
+        table = table.replace_schema_metadata(metadata)
     pq.write_table(table, path, compression="zstd", use_dictionary=True)
     return table.num_rows, path.stat().st_size
 
@@ -707,19 +746,42 @@ def build_service_caches(gtfs_paths, output_dir, reference_date=None,
                 if not zip_path.is_file():
                     raise FileNotFoundError(f"Missing {key} GTFS ZIP: {zip_path}")
                 downloaded = False
+                download_provenance = {
+                    "dataset_updated_at": None,
+                    "retrieved_at": None,
+                    "etag": None,
+                }
             else:
                 zip_path = temp_root / f"{key}.zip"
-                _download(OFFICIAL_GTFS_URLS[key], zip_path, download_session)
+                download_provenance = _download(
+                    OFFICIAL_GTFS_URLS[key], zip_path, download_session)
                 downloaded = True
             metadata = _feed_metadata(zip_path)
             files = _extract_required(zip_path, temp_root / key)
-            prepared[key] = {"zip": zip_path, "files": files, "metadata": metadata}
+            provenance = {
+                "operator": OPERATOR_LABELS[key],
+                "source_provider": SOURCE_PROVIDER,
+                "source_url": OFFICIAL_GTFS_URLS[key],
+                "feed_version": metadata["version"],
+                "dataset_updated_at": download_provenance["dataset_updated_at"],
+                "retrieved_at": download_provenance["retrieved_at"],
+                "etag": download_provenance["etag"],
+                "downloaded": downloaded,
+            }
+            prepared[key] = {
+                "zip": zip_path, "files": files, "metadata": metadata,
+                "provenance": provenance,
+            }
             report["feeds"][key] = {
                 "version": metadata["version"],
                 "validity_start": metadata["validity"][0].isoformat(),
                 "validity_end": metadata["validity"][1].isoformat(),
                 "zip_size": zip_path.stat().st_size,
                 "downloaded": downloaded,
+                "dataset_updated_at": provenance["dataset_updated_at"],
+                "retrieved_at": provenance["retrieved_at"],
+                "etag": provenance["etag"],
+                "source_url": provenance["source_url"],
             }
 
         local_validities = {
@@ -829,7 +891,11 @@ def build_service_caches(gtfs_paths, output_dir, reference_date=None,
         report["local_stops"] = _write_parquet(
             member_rows, LOCAL_STOPS_SCHEMA, stops_path)
         report["local_summary"] = _write_parquet(
-            summary_rows, LOCAL_SUMMARY_SCHEMA, summary_path)
+            summary_rows, LOCAL_SUMMARY_SCHEMA, summary_path,
+            _provenance_metadata({
+                key: prepared[key]["provenance"]
+                for key in ("delijn", "stib", "tec")
+            }))
         report["cross_operator_merge_count"] = sum(
             len(group.operators) > 1 for group in final_groups
             if representative_values(
@@ -844,7 +910,9 @@ def build_service_caches(gtfs_paths, output_dir, reference_date=None,
                 connection, prepared["sncb"]["metadata"], *rail_window)
         report["source_stop_counts"]["sncb"] = source_count
         rail_path = output_dir / "be_rail_service.parquet"
-        report["rail"] = _write_parquet(rail_rows, RAIL_SCHEMA, rail_path)
+        report["rail"] = _write_parquet(
+            rail_rows, RAIL_SCHEMA, rail_path,
+            _provenance_metadata({"sncb": prepared["sncb"]["provenance"]}))
         report["rail_station_count"] = len(rail_rows)
 
     report["duration_seconds"] = round(time.monotonic() - started, 3)

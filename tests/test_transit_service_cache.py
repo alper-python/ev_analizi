@@ -1,6 +1,7 @@
 from datetime import date
 from pathlib import Path
 import csv
+import json
 import sys
 import tempfile
 import unittest
@@ -221,6 +222,67 @@ def make_feed(path, operator, route_type, stops, trips, stop_times,
                    ["service_id", "date", "exception_type"], [])
 
 
+def read_provenance(path):
+    metadata = pq.ParquetFile(path).schema_arrow.metadata
+    payload = metadata[service.PROVENANCE_METADATA_KEY.encode("utf-8")]
+    return json.loads(payload.decode("utf-8"))
+
+
+class DownloadProvenanceTests(unittest.TestCase):
+    class Response:
+        def __init__(self, headers):
+            self.headers = headers
+
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size):
+            self.chunk_size = chunk_size
+            return iter((b"fixture",))
+
+    class Session:
+        def __init__(self, headers):
+            self.response = DownloadProvenanceTests.Response(headers)
+
+        def get(self, url, stream, timeout):
+            self.request = (url, stream, timeout)
+            return self.response
+
+    def test_valid_last_modified_etag_and_retrieval_are_separate(self):
+        with tempfile.TemporaryDirectory(prefix="transit-download-test-") as root:
+            session = self.Session({
+                "Last-Modified": "Mon, 14 Sep 2026 05:09:24 +0200",
+                "ETag": 'W/"fixture-etag"',
+                "Date": "Tue, 15 Sep 2026 12:00:00 GMT",
+            })
+            provenance = service._download(
+                "https://example.invalid/feed.zip", Path(root) / "feed.zip",
+                session)
+        self.assertEqual(provenance["dataset_updated_at"],
+                         "2026-09-14T03:09:24Z")
+        self.assertEqual(provenance["etag"], 'W/"fixture-etag"')
+        self.assertRegex(provenance["retrieved_at"],
+                         r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        self.assertNotEqual(provenance["retrieved_at"],
+                            provenance["dataset_updated_at"])
+
+    def test_missing_or_malformed_last_modified_has_no_fallback(self):
+        for headers in (
+            {"Date": "Tue, 15 Sep 2026 12:00:00 GMT"},
+            {"Last-Modified": "not-a-date",
+             "Date": "Tue, 15 Sep 2026 12:00:00 GMT"},
+        ):
+            with self.subTest(headers=headers):
+                with tempfile.TemporaryDirectory(
+                        prefix="transit-download-test-") as root:
+                    provenance = service._download(
+                        "https://example.invalid/feed.zip",
+                        Path(root) / "feed.zip", self.Session(headers))
+                self.assertIsNone(provenance["dataset_updated_at"])
+                self.assertIsNone(provenance["etag"])
+                self.assertIsNotNone(provenance["retrieved_at"])
+
+
 class SyntheticBuildTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -369,6 +431,49 @@ class SyntheticBuildTests(unittest.TestCase):
         self.assertEqual(self.report1["rail_window"],
                          ("2026-01-05", "2026-02-01"))
         self.assertEqual(self.report1["feeds"]["sncb"]["version"], "fixture-v1")
+
+    def test_local_override_report_has_explicit_unknown_http_provenance(self):
+        for key in ("delijn", "stib", "tec", "sncb"):
+            feed = self.report1["feeds"][key]
+            self.assertFalse(feed["downloaded"])
+            self.assertIsNone(feed["dataset_updated_at"])
+            self.assertIsNone(feed["retrieved_at"])
+            self.assertIsNone(feed["etag"])
+            self.assertEqual(feed["source_url"], service.OFFICIAL_GTFS_URLS[key])
+
+    def test_summary_metadata_contains_exactly_three_local_sources(self):
+        document = read_provenance(
+            self.out1 / "be_transit_service_summary.parquet")
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(set(document["sources"]), {"delijn", "stib", "tec"})
+        self.assertEqual(
+            {source["operator"] for source in document["sources"].values()},
+            {"De Lijn", "STIB/MIVB", "TEC"})
+        for source in document["sources"].values():
+            self.assertFalse(source["downloaded"])
+            self.assertIsNone(source["dataset_updated_at"])
+            self.assertIsNone(source["retrieved_at"])
+            self.assertIsNone(source["etag"])
+
+    def test_rail_metadata_contains_only_sncb(self):
+        document = read_provenance(self.out1 / "be_rail_service.parquet")
+        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(set(document["sources"]), {"sncb"})
+        self.assertEqual(document["sources"]["sncb"]["operator"], "SNCB/NMBS")
+
+    def test_parquet_row_schemas_and_stops_metadata_are_unchanged(self):
+        expected = {
+            "be_transit_service_stops.parquet": service.LOCAL_STOPS_SCHEMA,
+            "be_transit_service_summary.parquet": service.LOCAL_SUMMARY_SCHEMA,
+            "be_rail_service.parquet": service.RAIL_SCHEMA,
+        }
+        for filename, schema in expected.items():
+            actual = pq.ParquetFile(self.out1 / filename).schema_arrow
+            self.assertEqual(actual.remove_metadata(), schema)
+        stops_metadata = pq.ParquetFile(
+            self.out1 / "be_transit_service_stops.parquet").schema_arrow.metadata
+        self.assertNotIn(service.PROVENANCE_METADATA_KEY.encode("utf-8"),
+                         stops_metadata or {})
 
 
 class CalendarExceptionsTests(unittest.TestCase):
