@@ -421,6 +421,7 @@
                 <div style="text-align:center;padding:26px 20px;color:var(--muted);font:500 12px Manrope">
                     <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{{ t.osmContributors }}</a>
                     · <a href="#" onClick="{{ openDataSources }}">{{ t.dataSources }}</a>
+                    · <a href="#" onClick="{{ openPrivacy }}">{{ t.privacyLink }}</a>
                     · <a href="#" onClick="{{ openStyle }}">{{ t.styleGuide }}</a>
                 </div>
             </div>
@@ -1004,6 +1005,65 @@
             </div>
         </sc-if>
 
+        <sc-if value="{{ privacyOpen }}" hint-placeholder-val="{{ false }}">
+            <div class="data-sources-backdrop" onClick="{{ closePrivacy }}">
+                <div class="data-sources-dialog" role="dialog" aria-modal="true" aria-labelledby="privacy-notice-title"
+                     onClick="{{ keepPrivacyOpen }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                        <div id="privacy-notice-title" style="font:800 17px Manrope">{{ t.privacyTitle }}</div>
+                        <button onClick="{{ closePrivacy }}" aria-label="{{ t.close }}"
+                                style="width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:800 17px Manrope;cursor:pointer">×</button>
+                    </div>
+                    <div style="color:var(--muted);font:500 12px/1.55 Manrope">
+                        <section style="margin-top:12px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyResponsibleTitle }}</div>
+                            <p style="margin:5px 0 0">Alper Kaan Kavili<br><a href="mailto:kavilialperkaan@gmail.com">kavilialperkaan@gmail.com</a></p>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyProcessedTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyProcessed }}</p>
+                            <p style="margin:6px 0 0">{{ t.privacyPersistence }}</p>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyGeoapifyTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyGeoapify }}</p>
+                            <a href="https://www.geoapify.com/privacy-policy/" target="_blank" rel="noopener noreferrer">Geoapify privacy policy</a>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyMapTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyMap }}</p>
+                            <a href="https://stadiamaps.com/privacy/" target="_blank" rel="noopener noreferrer">Stadia Maps privacy policy</a>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyHostingTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyHosting }}</p>
+                            <a href="https://render.com/privacy" target="_blank" rel="noopener noreferrer">Render privacy policy</a>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyStorageTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyStorage }}</p>
+                            <p style="margin:6px 0 0">{{ t.privacyCookies }}</p>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyPurposeTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyPurpose }}</p>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacySourcesTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacySources }}</p>
+                            <a href="#" onClick="{{ openDataSourcesFromPrivacy }}">{{ t.dataSources }}</a>
+                        </section>
+                        <section style="margin-top:14px">
+                            <div style="color:var(--ink);font-weight:800">{{ t.privacyRightsTitle }}</div>
+                            <p style="margin:5px 0 0">{{ t.privacyRights }}</p>
+                            <p style="margin:6px 0 0">{{ t.privacyContact }} <a href="mailto:kavilialperkaan@gmail.com">kavilialperkaan@gmail.com</a></p>
+                            <a href="https://www.dataprotectionauthority.be/" target="_blank" rel="noopener noreferrer">{{ t.privacyAuthority }}</a>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </sc-if>
+
     </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script
@@ -1030,7 +1090,8 @@
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
           selectedCoords: null, calculationPopover: null, radiusInfoOpen: false, overallInfoOpen: false,
-          tileWarning: false, dataSourcesOpen: false, transitSources: null,
+          tileWarning: false, dataSourcesOpen: false, privacyOpen: false,
+          transitSources: null,
           viewportWidth: (typeof window !== 'undefined' ? window.innerWidth : 1440),
           isNarrow: (typeof window !== 'undefined' && window.innerWidth < 760)
         }, this.demoPatch(props.demoState));
@@ -1041,8 +1102,8 @@
           }
         };
         this.onDocumentKeyDown = event => {
-          if (event && event.key === 'Escape' && (this.state.calculationPopover || this.state.dataSourcesOpen)) {
-            this.setState({ calculationPopover: null, dataSourcesOpen: false });
+          if (event && event.key === 'Escape' && (this.state.calculationPopover || this.state.dataSourcesOpen || this.state.privacyOpen)) {
+            this.setState({ calculationPopover: null, dataSourcesOpen: false, privacyOpen: false });
           }
         };
         this.onResize = () => {
@@ -1072,6 +1133,28 @@
             transitDataSource: 'Statik GTFS verileri Belgian Mobility Open Data Portal üzerinden alınır.',
             transitOperators: 'Toplu taşıma işletmecileri',
             transitUpdateUnavailable: 'Güncelleme tarihi mevcut değil',
+            privacyLink: 'Gizlilik', privacyTitle: 'Gizlilik bildirimi',
+            privacyResponsibleTitle: 'Sorumlu kişi',
+            privacyProcessedTitle: 'Hangi bilgileri işliyoruz?',
+            privacyProcessed: 'Bir konumu aradığınızda veya analiz ettiğinizde girdiğiniz adres metni, analiz için kullanılan enlem ve boylam, dil ve tema tercihleriniz ile siteyi sunmak için gereken olağan teknik istek bilgileri işlenebilir.',
+            privacyPersistence: 'Kullanıcı hesabı oluşturulmaz. Uygulama kodu analiz sonuçlarını kalıcı olarak saklamaz. Son adres geçmişi sayfa oturumları arasında saklanmaz; yalnızca açık olan sayfanın çalışma belleğinde tutulur.',
+            privacyGeoapifyTitle: 'Adres arama ve Geoapify',
+            privacyGeoapify: 'Adres otomatik tamamlama için tarayıcı arama metnini bu uygulamanın sunucusuna gönderir; sunucu önerileri Geoapify üzerinden alır. Geoapify üçüncü taraf bir hizmettir ve arama isteğini ve teknik istek bilgilerini kendi gizlilik politikasına göre işleyebilir.',
+            privacyMapTitle: 'Harita ve Stadia Maps',
+            privacyMap: 'Harita arka planı Stadia Maps EU uç noktasından yüklenir. Harita kutucukları yüklenirken IP adresiniz gibi olağan teknik istek bilgileri harita hizmetine gönderilir.',
+            privacyHostingTitle: 'Barındırma',
+            privacyHosting: 'Uygulama, Render altyapısının Frankfurt bölgesinde barındırılır. Olağan web istekleri teknik altyapı ve sunucu günlükleri oluşturabilir.',
+            privacyStorageTitle: 'Yerel tarayıcı depolaması',
+            privacyStorage: 'Dil ve tema tercihleri, işlevsel arayüz ayarları olarak tarayıcının localStorage alanında en fazla 30 gün saklanabilir. Son adresler kalıcı olarak saklanmaz.',
+            privacyCookies: 'Site kasıtlı olarak reklam veya analiz çerezleri kullanmaz.',
+            privacyPurposeTitle: 'İşleme amaçları',
+            privacyPurpose: 'Bilgiler yalnızca adres önerileri sunmak, istenen konum analizini yapmak, haritayı göstermek, dil ve tema tercihlerini hatırlamak ve hizmeti işletip güvenliğini sağlamak için gerektiği ölçüde işlenir.',
+            privacySourcesTitle: 'Üçüncü taraf veri kaynakları',
+            privacySources: 'OpenStreetMap, Belgian Mobility ve toplu taşıma veri setleri konum ve ulaşım bilgisi kaynaklarıdır; bu uygulamada kullanıcı takip sistemi olarak kullanılmaz. Kaynak bilgileri için Veri kaynakları bölümüne bakabilirsiniz.',
+            privacyRightsTitle: 'Haklarınız ve iletişim',
+            privacyRights: 'Belçika ve AB’de, uygulanabildiği ölçüde erişim, düzeltme, silme, işlemeyi kısıtlama ve itiraz haklarınız olabilir. Ayrıca Belçika Veri Koruma Kurumuna şikâyette bulunabilirsiniz.',
+            privacyContact: 'Hizmetle ilgili kişisel veriler hakkında soru veya talep için:',
+            privacyAuthority: 'Belçika Veri Koruma Kurumu',
             thirdPartyTiles: 'Harita arka planı üçüncü taraf Stadia Maps hizmetinden yüklenir.',
             tileUnavailable: 'Harita arka planı şu anda kullanılamıyor. Skorlar ve sonuç listeleri kullanılmaya devam edebilir.',
             themeDark: 'Koyu tema', themeLight: 'Açık tema', themeToDark: 'Koyu temaya geç', themeToLight: 'Açık temaya geç', newSearch: '← Yeni arama', print: 'Raporu paylaş / yazdır',
@@ -1189,6 +1272,28 @@
             transitDataSource: 'Static GTFS data is obtained through the Belgian Mobility Open Data Portal.',
             transitOperators: 'Public transport operators',
             transitUpdateUnavailable: 'Data update date unavailable',
+            privacyLink: 'Privacy', privacyTitle: 'Privacy notice',
+            privacyResponsibleTitle: 'Who is responsible',
+            privacyProcessedTitle: 'What the application processes',
+            privacyProcessed: 'When you search for or analyze a location, the application may process the address text you enter, the latitude and longitude used for the analysis, your language and theme preferences, and ordinary technical request information needed to serve the website.',
+            privacyPersistence: 'No user account is created. The application code does not persist analysis results. Recent address history is not stored between page sessions; it exists only in the current page’s runtime memory.',
+            privacyGeoapifyTitle: 'Address search and Geoapify',
+            privacyGeoapify: 'For address autocomplete, the browser sends the search text to this application’s server, which obtains suggestions through Geoapify. Geoapify is a third-party service and may process the search request and technical request information under its own privacy policy.',
+            privacyMapTitle: 'Map and Stadia Maps',
+            privacyMap: 'Map background tiles are loaded from the Stadia Maps EU endpoint. Loading them sends ordinary technical request information, including your IP address, to the map service.',
+            privacyHostingTitle: 'Hosting',
+            privacyHosting: 'The application is hosted using Render infrastructure in the Frankfurt region. Normal web requests may generate technical infrastructure and server logs.',
+            privacyStorageTitle: 'Local browser storage',
+            privacyStorage: 'Language and theme preferences may be stored for up to 30 days in browser localStorage as functional interface settings. Recent addresses are not persistently stored.',
+            privacyCookies: 'The site does not intentionally use advertising or analytics cookies.',
+            privacyPurposeTitle: 'Purpose',
+            privacyPurpose: 'Information is processed only as needed to provide address suggestions, perform the requested location analysis, display the map, remember language and theme preferences, and operate and secure the service.',
+            privacySourcesTitle: 'Third-party data sources',
+            privacySources: 'OpenStreetMap, Belgian Mobility, and public transport datasets provide location and transit information; they are not used as user-tracking systems in this application. See Data sources for attribution.',
+            privacyRightsTitle: 'Your rights and contact',
+            privacyRights: 'In Belgium and the EU, you may have rights under applicable data protection law, including access, correction, deletion, restriction, and objection where applicable. You may also lodge a complaint with the Belgian Data Protection Authority.',
+            privacyContact: 'For privacy questions or requests concerning personal data related to the service, contact:',
+            privacyAuthority: 'Belgian Data Protection Authority',
             thirdPartyTiles: 'The map background is loaded from the third-party Stadia Maps service.',
             tileUnavailable: 'The map background is currently unavailable. Scores and result lists remain available.',
             themeDark: 'Dark theme', themeLight: 'Light theme', themeToDark: 'Switch to dark theme', themeToLight: 'Switch to light theme', newSearch: '← New search', print: 'Share / print report',
@@ -1306,6 +1411,28 @@
             transitDataSource: 'Statische GTFS-gegevens worden verkregen via het Belgian Mobility Open Data Portal.',
             transitOperators: 'Openbaarvervoermaatschappijen',
             transitUpdateUnavailable: 'Datum van gegevensupdate niet beschikbaar',
+            privacyLink: 'Privacy', privacyTitle: 'Privacyverklaring',
+            privacyResponsibleTitle: 'Wie is verantwoordelijk?',
+            privacyProcessedTitle: 'Welke gegevens verwerkt de toepassing?',
+            privacyProcessed: 'Wanneer u een locatie zoekt of analyseert, kan de toepassing de ingevoerde adrestekst, de breedte- en lengtegraad voor de analyse, uw taal- en themavoorkeuren en gewone technische verzoekgegevens verwerken die nodig zijn om de website aan te bieden.',
+            privacyPersistence: 'Er wordt geen gebruikersaccount aangemaakt. De toepassingscode slaat analyseresultaten niet blijvend op. Recente adressen worden niet tussen paginasessies bewaard; ze bestaan alleen in het werkgeheugen van de huidige pagina.',
+            privacyGeoapifyTitle: 'Adres zoeken en Geoapify',
+            privacyGeoapify: 'Voor adresaanvulling stuurt de browser de zoektekst naar de server van deze toepassing, die suggesties via Geoapify opvraagt. Geoapify is een externe dienst en kan de zoekopdracht en technische verzoekgegevens volgens zijn eigen privacybeleid verwerken.',
+            privacyMapTitle: 'Kaart en Stadia Maps',
+            privacyMap: 'De achtergrondtegels van de kaart worden geladen via het EU-eindpunt van Stadia Maps. Daarbij worden gewone technische verzoekgegevens, waaronder uw IP-adres, naar de kaartdienst gestuurd.',
+            privacyHostingTitle: 'Hosting',
+            privacyHosting: 'De toepassing wordt gehost op Render-infrastructuur in de regio Frankfurt. Gewone webverzoeken kunnen technische infrastructuur- en serverlogboeken genereren.',
+            privacyStorageTitle: 'Lokale browseropslag',
+            privacyStorage: 'Taal- en themavoorkeuren kunnen als functionele interface-instellingen maximaal 30 dagen in localStorage van de browser worden bewaard. Recente adressen worden niet blijvend opgeslagen.',
+            privacyCookies: 'De site gebruikt niet bewust advertentie- of analysecookies.',
+            privacyPurposeTitle: 'Doeleinden',
+            privacyPurpose: 'Informatie wordt alleen verwerkt voor zover nodig om adressuggesties te geven, de gevraagde locatieanalyse uit te voeren, de kaart te tonen, taal- en themavoorkeuren te onthouden en de dienst te beheren en beveiligen.',
+            privacySourcesTitle: 'Externe gegevensbronnen',
+            privacySources: 'OpenStreetMap, Belgian Mobility en openbaarvervoersdatasets leveren locatie- en vervoersinformatie; ze worden in deze toepassing niet gebruikt als systemen om gebruikers te volgen. Raadpleeg Gegevensbronnen voor de bronvermelding.',
+            privacyRightsTitle: 'Uw rechten en contact',
+            privacyRights: 'In België en de EU kunt u, waar van toepassing, rechten hebben op inzage, correctie, verwijdering, beperking en bezwaar. U kunt ook een klacht indienen bij de Belgische Gegevensbeschermingsautoriteit.',
+            privacyContact: 'Neem voor privacyvragen of verzoeken over persoonsgegevens in verband met de dienst contact op via:',
+            privacyAuthority: 'Belgische Gegevensbeschermingsautoriteit',
             thirdPartyTiles: 'De kaartachtergrond wordt geladen via de externe dienst Stadia Maps.',
             tileUnavailable: 'De kaartachtergrond is momenteel niet beschikbaar. Scores en resultaten blijven bruikbaar.',
             themeDark: 'Donker thema', themeLight: 'Licht thema', themeToDark: 'Schakel naar donker thema', themeToLight: 'Schakel naar licht thema', newSearch: '← Nieuwe zoekopdracht', print: 'Rapport delen / afdrukken',
@@ -2163,12 +2290,17 @@
           toggleOverallInfo: () => this.setState({ overallInfoOpen: !this.state.overallInfoOpen }),
           tileWarning: S.tileWarning,
           dataSourcesOpen: S.dataSourcesOpen,
+          privacyOpen: S.privacyOpen,
           transitSources,
           openDataSources: e => { if (e && e.preventDefault) e.preventDefault(); this.loadDataSources(); this.setState({ dataSourcesOpen: true }); },
           closeDataSources: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ dataSourcesOpen: false }); },
           keepDataSourcesOpen: e => { if (e && e.stopPropagation) e.stopPropagation(); },
+          openPrivacy: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ privacyOpen: true }); },
+          closePrivacy: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ privacyOpen: false }); },
+          keepPrivacyOpen: e => { if (e && e.stopPropagation) e.stopPropagation(); },
+          openDataSourcesFromPrivacy: e => { if (e && e.preventDefault) e.preventDefault(); this.loadDataSources(); this.setState({ privacyOpen: false, dataSourcesOpen: true }); },
           openStyle: e => { e.preventDefault(); this.setState({ view: 'style' }); },
-          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false, overallInfoOpen: false, calculationPopover: null, dataSourcesOpen: false }),
+          goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false, overallInfoOpen: false, calculationPopover: null, dataSourcesOpen: false, privacyOpen: false }),
           onPrint: () => window.print(),
           retry: () => this.doSearch(S.address || this.DEF_ADDR()),
           retryBigger: () => this.doSearch(S.address || this.DEF_ADDR(), 5000),

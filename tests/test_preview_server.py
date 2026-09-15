@@ -769,6 +769,118 @@ class PrivacyStorageContentTests(unittest.TestCase):
             self.assertNotIn(forbidden, self.frontend)
 
 
+class PrivacyNoticeContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_footer_has_localized_privacy_link_and_opens_modal(self):
+        self.assertIn(
+            '<a href="#" onClick="{{ openPrivacy }}">{{ t.privacyLink }}</a>',
+            self.frontend,
+        )
+        for label in (
+            "privacyLink: 'Gizlilik'", "privacyLink: 'Privacy'",
+        ):
+            self.assertIn(label, self.frontend)
+        self.assertIn("this.setState({ privacyOpen: true })", self.frontend)
+
+    def test_turkish_notice_title_and_content_exist(self):
+        for text in (
+            "privacyTitle: 'Gizlilik bildirimi'",
+            "Kullanıcı hesabı oluşturulmaz",
+            "Son adres geçmişi sayfa oturumları arasında saklanmaz",
+            "Render altyapısının Frankfurt bölgesinde",
+            "uygulanabildiği ölçüde erişim, düzeltme, silme",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_dutch_notice_title_and_content_exist(self):
+        for text in (
+            "privacyTitle: 'Privacyverklaring'",
+            "Er wordt geen gebruikersaccount aangemaakt",
+            "Recente adressen worden niet tussen paginasessies bewaard",
+            "Render-infrastructuur in de regio Frankfurt",
+            "waar van toepassing, rechten hebben op inzage, correctie",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_english_notice_title_and_content_exist(self):
+        for text in (
+            "privacyTitle: 'Privacy notice'",
+            "No user account is created",
+            "Recent address history is not stored between page sessions",
+            "Render infrastructure in the Frankfurt region",
+            "rights under applicable data protection law",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_exact_controller_and_contact_are_shown(self):
+        self.assertEqual(self.frontend.count("Alper Kaan Kavili"), 1)
+        self.assertEqual(
+            self.frontend.count(
+                '<a href="mailto:kavilialperkaan@gmail.com">kavilialperkaan@gmail.com</a>'),
+            2,
+        )
+        self.assertNotIn("tel:", self.frontend)
+
+    def test_required_third_party_privacy_links_are_safe(self):
+        for url in (
+            "https://www.geoapify.com/privacy-policy/",
+            "https://stadiamaps.com/privacy/",
+            "https://render.com/privacy",
+            "https://www.dataprotectionauthority.be/",
+        ):
+            link_start = self.frontend.index(f'<a href="{url}"')
+            link_end = self.frontend.index(">", link_start)
+            link = self.frontend[link_start:link_end]
+            self.assertIn('target="_blank"', link)
+            self.assertIn('rel="noopener noreferrer"', link)
+
+    def test_storage_and_cookie_disclosures_match_current_behavior(self):
+        for text in (
+            "localStorage alanında en fazla 30 gün",
+            "maximaal 30 dagen in localStorage",
+            "stored for up to 30 days in browser localStorage",
+            "Son adresler kalıcı olarak saklanmaz",
+            "Recente adressen worden niet blijvend opgeslagen",
+            "Recent addresses are not persistently stored",
+            "reklam veya analiz çerezleri kullanmaz",
+            "niet bewust advertentie- of analysecookies",
+            "does not intentionally use advertising or analytics cookies",
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_notice_uses_one_accessible_scrollable_modal_template(self):
+        self.assertEqual(self.frontend.count('id="privacy-notice-title"'), 1)
+        self.assertIn('aria-labelledby="privacy-notice-title"', self.frontend)
+        self.assertIn('<button onClick="{{ closePrivacy }}"', self.frontend)
+        self.assertIn('class="data-sources-dialog" role="dialog"',
+                      self.frontend)
+        self.assertIn("max-height: calc(100vh - 24px)", self.frontend)
+        self.assertIn("overflow-y: auto", self.frontend)
+        self.assertIn("this.state.privacyOpen", self.frontend)
+
+    def test_no_cookie_banner_or_consent_ui_is_added(self):
+        lowered = self.frontend.lower()
+        for marker in (
+            'class="cookie-banner', 'id="cookie-banner',
+            'class="consent-popup', 'id="consent-popup',
+        ):
+            self.assertNotIn(marker, lowered)
+
+    def test_notice_refers_to_existing_data_sources_modal(self):
+        self.assertIn(
+            '<a href="#" onClick="{{ openDataSourcesFromPrivacy }}">{{ t.dataSources }}</a>',
+            self.frontend,
+        )
+        self.assertIn(
+            "this.setState({ privacyOpen: false, dataSourcesOpen: true })",
+            self.frontend,
+        )
+
+
 class RadiusReanalysisApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
