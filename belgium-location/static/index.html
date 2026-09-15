@@ -1015,11 +1015,14 @@
         this._dataSourcesRequested = false;
         this.tileGeneration = 0; this.tileErrorShown = false;
         this.groups = {}; this.mk = {};
-        let theme = 'light', lang = 'tr';
-        try {
-          theme = localStorage.getItem('eca-theme') || props.theme || 'light';
-          lang = localStorage.getItem('eca-lang') || props.language || 'tr';
-        } catch (e) {}
+        this._recent = [];
+        try { localStorage.removeItem('eca-recent'); } catch (e) {}
+        const themeFallback = ['light', 'dark'].includes(props.theme) ? props.theme : 'light';
+        const langFallback = ['tr', 'en', 'nl'].includes(props.language) ? props.language : 'tr';
+        let theme = this.loadPreference(
+          'eca-theme', 'eca-theme-saved-at', ['light', 'dark'], themeFallback);
+        let lang = this.loadPreference(
+          'eca-lang', 'eca-lang-saved-at', ['tr', 'en', 'nl'], langFallback);
         if (!this.T()[lang]) lang = 'tr';
         this.state = Object.assign({
           theme, lang, view: 'home', status: 'results', errorKind: null,
@@ -1468,12 +1471,37 @@
         };
       }
 
-      loadRecent() { try { return JSON.parse(localStorage.getItem('eca-recent') || '[]'); } catch (e) { return []; } }
-      saveRecent(addr) {
+      get PREFERENCE_MAX_AGE_MS() { return 30 * 24 * 60 * 60 * 1000; }
+      loadPreference(key, timestampKey, allowed, fallback) {
         try {
-          let r = this.loadRecent().filter(x => x !== addr); r.unshift(addr); r = r.slice(0, 4);
-          localStorage.setItem('eca-recent', JSON.stringify(r));
+          const value = localStorage.getItem(key);
+          const rawTimestamp = localStorage.getItem(timestampKey);
+          const savedAt = Number(rawTimestamp);
+          const age = Date.now() - savedAt;
+          if (allowed.includes(value) && rawTimestamp !== null
+              && Number.isFinite(savedAt) && savedAt > 0
+              && age >= 0 && age <= this.PREFERENCE_MAX_AGE_MS) return value;
+          localStorage.removeItem(key);
+          localStorage.removeItem(timestampKey);
         } catch (e) {}
+        return fallback;
+      }
+      savePreference(key, timestampKey, value) {
+        try {
+          localStorage.setItem(key, value);
+          localStorage.setItem(timestampKey, String(Date.now()));
+        } catch (e) {
+          try {
+            localStorage.removeItem(key);
+            localStorage.removeItem(timestampKey);
+          } catch (cleanupError) {}
+        }
+      }
+      loadRecent() { return this._recent.slice(); }
+      saveRecent(addr) {
+        let recent = this.loadRecent().filter(value => value !== addr);
+        recent.unshift(addr);
+        this._recent = recent.slice(0, 4);
       }
 
       fmtDist(m) { return m < 1000 ? m + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
@@ -1720,7 +1748,7 @@
       }
 
       setLang(lang) {
-        try { localStorage.setItem('eca-lang', lang); } catch (e) {}
+        this.savePreference('eca-lang', 'eca-lang-saved-at', lang);
         if (this.map) { this.map.remove(); this.map = null; this.tiles = null; this.mk = {}; this.groups = {}; }
         this.setState({ lang, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
       }
@@ -2118,7 +2146,7 @@
           themeIcon: this.ic(dark ? 'sun' : 'moon', 'currentColor', 15),
           themeLabel: dark ? t.themeLight : t.themeDark,
           themeActionLabel: dark ? t.themeToLight : t.themeToDark,
-          toggleTheme: () => { const th = dark ? 'light' : 'dark'; try { localStorage.setItem('eca-theme', th); } catch (e) {} this.setState({ theme: th }); },
+          toggleTheme: () => { const th = dark ? 'light' : 'dark'; this.savePreference('eca-theme', 'eca-theme-saved-at', th); this.setState({ theme: th }); },
           addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; },
           onAddrInput: e => this.handleAddressInput(e),
           onAddrKey: e => this.handleAddressKey(e),

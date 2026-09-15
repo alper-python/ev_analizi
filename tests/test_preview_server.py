@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import math
+import re
 import sys
 import tempfile
 import unittest
@@ -666,6 +667,106 @@ class AccessibilityBaselineContentTests(unittest.TestCase):
         self.assertIn('<input ref="{{ lonRef }}"', self.frontend)
         self.assertIn('<button onClick="{{ toggleTheme }}"', self.frontend)
         self.assertNotIn('tabindex="1"', self.frontend.lower())
+
+
+class PrivacyStorageContentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
+            encoding="utf-8")
+
+    def test_recent_addresses_are_not_read_from_or_written_to_storage(self):
+        self.assertNotIn("localStorage.getItem('eca-recent')", self.frontend)
+        self.assertNotIn("localStorage.setItem('eca-recent'", self.frontend)
+        self.assertNotIn("sessionStorage", self.frontend)
+        self.assertNotIn("document.cookie", self.frontend)
+
+    def test_legacy_recent_addresses_are_removed_best_effort(self):
+        self.assertIn(
+            "try { localStorage.removeItem('eca-recent'); } catch (e) {}",
+            self.frontend,
+        )
+
+    def test_theme_and_language_restore_only_with_30_day_timestamps(self):
+        self.assertIn(
+            "get PREFERENCE_MAX_AGE_MS() { return 30 * 24 * 60 * 60 * 1000; }",
+            self.frontend,
+        )
+        self.assertIn(
+            "'eca-theme', 'eca-theme-saved-at', ['light', 'dark'], themeFallback",
+            self.frontend,
+        )
+        self.assertIn(
+            "'eca-lang', 'eca-lang-saved-at', ['tr', 'en', 'nl'], langFallback",
+            self.frontend,
+        )
+        self.assertIn("allowed.includes(value)", self.frontend)
+        self.assertIn("age <= this.PREFERENCE_MAX_AGE_MS", self.frontend)
+
+    def test_expired_future_and_malformed_timestamps_fail_safely(self):
+        for source in (
+            "const savedAt = Number(rawTimestamp)",
+            "rawTimestamp !== null",
+            "Number.isFinite(savedAt)",
+            "savedAt > 0",
+            "age >= 0",
+            "localStorage.removeItem(key)",
+            "localStorage.removeItem(timestampKey)",
+            "return fallback",
+        ):
+            self.assertIn(source, self.frontend)
+
+    def test_preference_changes_refresh_value_and_timestamp_together(self):
+        helper_start = self.frontend.index(
+            "savePreference(key, timestampKey, value)")
+        helper_end = self.frontend.index("loadRecent()", helper_start)
+        helper = self.frontend[helper_start:helper_end]
+        self.assertIn("localStorage.setItem(key, value)", helper)
+        self.assertIn(
+            "localStorage.setItem(timestampKey, String(Date.now()))", helper)
+        self.assertIn(
+            "this.savePreference('eca-lang', 'eca-lang-saved-at', lang)",
+            self.frontend,
+        )
+        self.assertIn(
+            "this.savePreference('eca-theme', 'eca-theme-saved-at', th)",
+            self.frontend,
+        )
+
+    def test_all_storage_access_is_defensive(self):
+        storage_lines = [line.strip() for line in self.frontend.splitlines()
+                         if "localStorage." in line]
+        self.assertTrue(storage_lines)
+        storage_region_start = self.frontend.index(
+            "try { localStorage.removeItem('eca-recent')")
+        storage_region_end = self.frontend.index("fmtDist(m)", storage_region_start)
+        storage_region = self.frontend[storage_region_start:storage_region_end]
+        for line in storage_lines:
+            self.assertIn(line, storage_region)
+
+    def test_recent_addresses_continue_in_current_page_memory(self):
+        for source in (
+            "this._recent = []",
+            "loadRecent() { return this._recent.slice(); }",
+            "this._recent = recent.slice(0, 4)",
+            "this.saveRecent(addr)",
+            "recent: this.loadRecent()",
+        ):
+            self.assertIn(source, self.frontend)
+
+    def test_no_other_personal_data_is_persisted(self):
+        storage_keys = set(re.findall(
+            r"localStorage\.(?:getItem|setItem|removeItem)\('([^']+)'",
+            self.frontend,
+        ))
+        self.assertEqual(storage_keys, {"eca-recent"})
+        for forbidden in (
+            "localStorage.setItem('address'",
+            "localStorage.setItem('coordinates'",
+            "localStorage.setItem('analysis'",
+            "localStorage.setItem('results'",
+        ):
+            self.assertNotIn(forbidden, self.frontend)
 
 
 class RadiusReanalysisApiTests(unittest.TestCase):
