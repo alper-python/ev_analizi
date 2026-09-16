@@ -440,7 +440,44 @@ class AnalyzeValidationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         analysis.assert_called_once_with(
             50.8795, 4.7023, "Leuven, Belgium",
-            server.DEFAULT_RADIUS_M, server.TOP_N, "tr")
+            server.DEFAULT_RADIUS_M, server.TOP_N, "en", country_code="be")
+
+    def test_missing_country_and_language_default_to_belgium_and_english(self):
+        with patch.object(server, "_run_preview_analysis", return_value={}) as analysis:
+            response = self.client.post("/api/analyze", json={
+                "lat": 50.88, "lon": 4.70,
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(analysis.call_args.args[-1], "en")
+        self.assertEqual(analysis.call_args.kwargs, {"country_code": "be"})
+
+    def test_explicit_belgium_and_language_are_preserved(self):
+        with patch.object(server, "_run_preview_analysis", return_value={}) as analysis:
+            response = self.client.post("/api/analyze", json={
+                "lat": 50.88, "lon": 4.70, "country_code": "be", "lang": "tr",
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(analysis.call_args.args[-1], "tr")
+        self.assertEqual(analysis.call_args.kwargs, {"country_code": "be"})
+
+    def test_country_code_is_normalized(self):
+        with patch.object(server, "_run_preview_analysis", return_value={}) as analysis:
+            response = self.client.post("/api/analyze", json={
+                "lat": 50.88, "lon": 4.70, "country_code": "BE",
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(analysis.call_args.kwargs, {"country_code": "be"})
+
+    def test_unsupported_or_invalid_country_returns_controlled_400(self):
+        with patch.object(server, "_run_preview_analysis") as analysis:
+            for country in ("nl", "", None, True, 1, [], {}):
+                with self.subTest(country=country):
+                    response = self.client.post("/api/analyze", json={
+                        "lat": 50.88, "lon": 4.70, "country_code": country,
+                    })
+                    payload = self.assert_json_error(response)
+                    self.assertEqual(payload["error"]["message"], "Unsupported country.")
+        analysis.assert_not_called()
 
     def test_address_not_found_has_a_distinct_json_error(self):
         with (patch.object(server, "DATA_MODE", "real"),
@@ -918,6 +955,51 @@ class PublicUiPolishContentTests(unittest.TestCase):
             self.assertNotIn(removed, self.frontend)
 
 
+class CountryDatasetAnalysisTests(unittest.TestCase):
+    def setUp(self):
+        server._result_cache.clear()
+
+    def tearDown(self):
+        server._result_cache.clear()
+
+    def test_only_belgium_maps_the_existing_seven_runtime_paths(self):
+        self.assertEqual(set(server.COUNTRY_DATASETS), {"be"})
+        self.assertEqual(server.COUNTRY_DATASETS["be"], server._runtime_asset_paths())
+        self.assertEqual(len(server.COUNTRY_DATASETS["be"]), 7)
+
+    def test_selected_dataset_is_forwarded_and_cache_key_includes_country(self):
+        dataset = {name: "fixture-" + name
+                   for name in server.COUNTRY_DATASETS["be"]}
+        arguments = (50.88, 4.70, "Selected address", 2500, 10, "en")
+        key = ("be", 50.88, 4.70, "Selected address", 2500, 10, "en", server.DATA_MODE)
+        server._result_cache[("other",) + key[1:]] = {"overall": -1}
+        result = {
+            "overall": 5.0,
+            "scores": {config["label"]: 5.0 for config in server.CATS.values()},
+        }
+        with (patch.dict(server.COUNTRY_DATASETS, {"be": dataset}),
+              patch.object(server, "analyze_location", return_value=result) as analysis,
+              patch.object(server, "_category_payload", return_value={}) as category):
+            first = server._run_preview_analysis(*arguments, country_code="be")
+            second = server._run_preview_analysis(*arguments, country_code="be")
+
+        self.assertIs(first, second)
+        self.assertIs(server._result_cache[key], first)
+        analysis.assert_called_once_with(
+            lat=50.88, lon=4.70, radius=2500, topn=10,
+            nodes_path=dataset["poi_nodes"], polys_path=dataset["poi_polygons"],
+            transit_stops_path=dataset["transit_service_stops"],
+            transit_summary_path=dataset["transit_service_summary"],
+            rail_service_path=dataset["rail_service"],
+            park_cache_path=dataset["park_destinations"],
+            sport_cache_path=dataset["sport_destinations"],
+        )
+        self.assertEqual(category.call_count, 6)
+        self.assertTrue(all(call.kwargs["dataset"] is dataset
+                            for call in category.call_args_list))
+        self.assertNotIn("country_code", first)
+
+
 class RadiusReanalysisApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -934,6 +1016,15 @@ class RadiusReanalysisApiTests(unittest.TestCase):
                 str(Path(cls.demo_nodes).with_name(
                     "be_sport_destinations.parquet"))),
             patch.object(server, "DATA_MODE", "demo"),
+            patch.dict(server.COUNTRY_DATASETS, {"be": {
+                **server.COUNTRY_DATASETS["be"],
+                "poi_nodes": cls.demo_nodes,
+                "poi_polygons": cls.demo_polys,
+                "park_destinations": str(Path(cls.demo_nodes).with_name(
+                    "be_park_destinations.parquet")),
+                "sport_destinations": str(Path(cls.demo_nodes).with_name(
+                    "be_sport_destinations.parquet")),
+            }}),
             patch.object(server, "_runtime_readiness",
                          return_value=READY_RUNTIME),
         ]
@@ -1116,15 +1207,20 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
                     "breakdowns": {"park": breakdown}, "map_html": ""}
 
         def category_payload(con, category, lat, lon, radius, topn, score,
-                             breakdown=None):
+                             breakdown=None, dataset=None):
             if category == "park":
                 return original_payload(
-                    con, category, lat, lon, radius, topn, score, breakdown)
+                    con, category, lat, lon, radius, topn, score, breakdown,
+                    dataset=dataset)
             return {"key": category, "score": score, "count": 0,
                     "nearest_m": None, "items": [], "score_breakdown": None}
 
         client = server.app.test_client()
         with (patch.object(server, "PARK_PATH", str(self.park_path)),
+              patch.dict(server.COUNTRY_DATASETS, {"be": {
+                  **server.COUNTRY_DATASETS["be"],
+                  "park_destinations": str(self.park_path),
+              }}),
               patch.object(server, "analyze_location", side_effect=analysis),
               patch.object(server, "_category_payload",
                            side_effect=category_payload),
@@ -1459,7 +1555,7 @@ class TransitPreviewContractTests(unittest.TestCase):
                     "breakdowns": {"transit": breakdown}}
 
         def category_payload(_con, category, _lat, _lon, _radius, _topn,
-                             score, transit_breakdown=None):
+                             score, transit_breakdown=None, dataset=None):
             return {
                 "key": category, "score": score, "count": 140,
                 "nearest_m": 149, "items": [{"name": "Legacy item"}],

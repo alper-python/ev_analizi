@@ -336,6 +336,17 @@ TRANSIT_STOPS_PATH = _existing_cache(
 TRANSIT_SUMMARY_PATH = _existing_cache(
     "TRANSIT_SERVICE_SUMMARY", "be_transit_service_summary.parquet")
 RAIL_SERVICE_PATH = _existing_cache("RAIL_SERVICE", "be_rail_service.parquet")
+COUNTRY_DATASETS = {
+    "be": {
+        "poi_nodes": NODES_PATH,
+        "poi_polygons": POLYS_PATH,
+        "park_destinations": PARK_PATH,
+        "sport_destinations": SPORT_PATH,
+        "transit_service_stops": TRANSIT_STOPS_PATH,
+        "transit_service_summary": TRANSIT_SUMMARY_PATH,
+        "rail_service": RAIL_SERVICE_PATH,
+    },
+}
 # Demo caches remain available as explicit test fixtures, but production runtime
 # selection never falls back to them when required Belgium data is unavailable.
 DATA_MODE = "real"
@@ -518,10 +529,12 @@ def _transit_display_type(row):
     return "transit_point"
 
 
-def _market_score_breakdown(con, lat, lon, score):
+def _market_score_breakdown(con, lat, lon, score, dataset=None):
     """Describe the existing Market score without changing its calculation."""
+    dataset = dataset if dataset is not None else _runtime_asset_paths()
     scoring_rows = deduplicate_market_pois(query_market_candidates(
-        con, NODES_PATH, POLYS_PATH, lat, lon, MARKET_SCORING_RADIUS_M))
+        con, dataset["poi_nodes"], dataset["poi_polygons"], lat, lon,
+        MARKET_SCORING_RADIUS_M))
     effective_count = sum(
         MARKET_TYPE_WEIGHTS.get(market_type(row), 0.0) for row in scoring_rows)
     choice_points = min(effective_count, 3.0)
@@ -538,10 +551,12 @@ def _market_score_breakdown(con, lat, lon, score):
     }
 
 
-def _school_score_breakdown(con, lat, lon):
+def _school_score_breakdown(con, lat, lon, dataset=None):
     """Expose centrally calculated School Score V1 components to the UI."""
+    dataset = dataset if dataset is not None else _runtime_asset_paths()
     scoring_rows = deduplicate_school_pois(query_school_candidates(
-        con, NODES_PATH, POLYS_PATH, lat, lon, SCHOOL_SCORING_RADIUS_M))
+        con, dataset["poi_nodes"], dataset["poi_polygons"], lat, lon,
+        SCHOOL_SCORING_RADIUS_M))
     components = school_score_components(scoring_rows)
     return {
         "proximity_points": components["proximity_points"],
@@ -551,18 +566,20 @@ def _school_score_breakdown(con, lat, lon):
 
 
 def _category_payload(con, category, lat, lon, radius, topn, score,
-                      dedicated_breakdown=None):
+                      dedicated_breakdown=None, dataset=None):
+    dataset = dataset if dataset is not None else _runtime_asset_paths()
+    nodes_path, polys_path = dataset["poi_nodes"], dataset["poi_polygons"]
     if category == "market":
         frame, _market_score, count, nearest = analyze_market(
-            con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
-        score_breakdown = _market_score_breakdown(con, lat, lon, score)
+            con, nodes_path, polys_path, lat, lon, radius, topn)
+        score_breakdown = _market_score_breakdown(con, lat, lon, score, dataset)
     elif category == "school":
         frame, _school_score, count, nearest = analyze_school(
-            con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
-        score_breakdown = _school_score_breakdown(con, lat, lon)
+            con, nodes_path, polys_path, lat, lon, radius, topn)
+        score_breakdown = _school_score_breakdown(con, lat, lon, dataset)
     elif category == "health":
         frame, _health_score, count, nearest, components = analyze_health(
-            con, NODES_PATH, POLYS_PATH, lat, lon, radius, topn)
+            con, nodes_path, polys_path, lat, lon, radius, topn)
         score_breakdown = {
             "clinical_proximity_points": components["clinical_proximity_points"],
             "choice_points": components["choice_points"],
@@ -572,14 +589,14 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
         }
     elif category == "park":
         frame, _park_score, count, nearest, _components = analyze_park(
-            con, PARK_PATH, lat, lon, radius, topn)
+            con, dataset["park_destinations"], lat, lon, radius, topn)
         score_breakdown = dedicated_breakdown
     elif category == "sport":
         frame, _sport_score, count, nearest, _components = analyze_sport(
-            con, SPORT_PATH, lat, lon, radius, topn)
+            con, dataset["sport_destinations"], lat, lon, radius, topn)
         score_breakdown = dedicated_breakdown
     else:
-        frame = query_category(con, NODES_PATH, POLYS_PATH, category, lat, lon, radius, topn)
+        frame = query_category(con, nodes_path, polys_path, category, lat, lon, radius, topn)
         count = int(frame.iloc[0]["n_total"]) if not frame.empty else 0
         nearest = float(frame.iloc[0]["d_min"]) if not frame.empty else None
         score_breakdown = dedicated_breakdown if category == "transit" else None
@@ -642,27 +659,30 @@ def _category_payload(con, category, lat, lon, radius, topn, score,
             "items": items}
 
 
-def _run_preview_analysis(lat, lon, display_address, radius, topn, lang):
-    key = (round(lat, 6), round(lon, 6), display_address, radius, topn, lang, DATA_MODE)
+def _run_preview_analysis(lat, lon, display_address, radius, topn, lang,
+                          country_code="be"):
+    dataset = COUNTRY_DATASETS[country_code]
+    key = (country_code, round(lat, 6), round(lon, 6), display_address, radius, topn, lang, DATA_MODE)
     with _cache_lock:
         cached = _result_cache.get(key)
     if cached:
         return cached
 
     result = analyze_location(lat=lat, lon=lon, radius=radius, topn=topn,
-                              nodes_path=NODES_PATH, polys_path=POLYS_PATH,
-                              transit_stops_path=TRANSIT_STOPS_PATH,
-                              transit_summary_path=TRANSIT_SUMMARY_PATH,
-                              rail_service_path=RAIL_SERVICE_PATH,
-                              park_cache_path=PARK_PATH,
-                              sport_cache_path=SPORT_PATH)
+                              nodes_path=dataset["poi_nodes"],
+                              polys_path=dataset["poi_polygons"],
+                              transit_stops_path=dataset["transit_service_stops"],
+                              transit_summary_path=dataset["transit_service_summary"],
+                              rail_service_path=dataset["rail_service"],
+                              park_cache_path=dataset["park_destinations"],
+                              sport_cache_path=dataset["sport_destinations"])
     with duckdb.connect() as con:
         categories = [
             _category_payload(con, category, lat, lon, radius, topn,
                               result["scores"][CATS[category]["label"]],
                               result.get("breakdowns", {}).get(category)
                               if category in {"transit", "park", "sport"}
-                              else None)
+                              else None, dataset=dataset)
             for category in CATS
         ]
     payload = {"display_address": display_address, "lat": lat, "lon": lon,
@@ -743,7 +763,14 @@ def _analyze_api_response():
     if not isinstance(body, dict):
         return _json_error("invalid_request", "A JSON object is required.", 400)
 
-    lang_value = body.get("lang", "tr")
+    country_code = body.get("country_code", "be")
+    if not isinstance(country_code, str):
+        return _json_error("invalid_request", "Unsupported country.", 400)
+    country_code = country_code.strip().lower()
+    if country_code not in COUNTRY_DATASETS:
+        return _json_error("invalid_request", "Unsupported country.", 400)
+
+    lang_value = body.get("lang", "en")
     if not isinstance(lang_value, str):
         return _json_error("invalid_request", "Unsupported language.", 400)
     lang = lang_value.lower()
@@ -804,7 +831,8 @@ def _analyze_api_response():
                 return _json_error(
                     "address_not_found", "Address could not be geocoded.", 400)
 
-    return jsonify(_run_preview_analysis(lat, lon, display_address, radius, topn, lang))
+    return jsonify(_run_preview_analysis(
+        lat, lon, display_address, radius, topn, lang, country_code=country_code))
 
 
 @app.get("/")
