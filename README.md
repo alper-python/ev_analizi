@@ -1,4 +1,7 @@
-# Nearby Access Score — Belgium
+# DomiFrame
+**Property Intelligence**
+
+Current public module: **Nearby Access Score — Belgium**
 
 Nearby Access Score analyzes access to selected everyday amenities and services around an address in Belgium. It reports separate scores for:
 
@@ -9,7 +12,7 @@ Nearby Access Score analyzes access to selected everyday amenities and services 
 - Park
 - Sport
 
-Public application: [https://ev-analizi-be.onrender.com](https://ev-analizi-be.onrender.com)
+Public application: [https://domiframe.com](https://domiframe.com)
 
 The interface is available in Turkish, Dutch, and English.
 
