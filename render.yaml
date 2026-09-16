@@ -1,19 +1,23 @@
+version: "1"
+
 services:
   - type: web
     name: domiframe
     runtime: python
-    branch: main
-    region: frankfurt
+    repo: https://github.com/alper-python/domiframe
     plan: 0.5c-512mb
-    numInstances: 1
-    buildCommand: pip install -r belgium-location/requirements-runtime.txt
-    startCommand: gunicorn --chdir belgium-location --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 server:app
-    autoDeployTrigger: off
-    healthCheckPath: /api/health
     envVars:
       - key: GEOAPIFY_API_KEY
         sync: false
+    region: frankfurt
+    buildCommand: pip install -r belgium-location/requirements-runtime.txt
+    startCommand: gunicorn --chdir belgium-location --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 server:app
+    healthCheckPath: /api/health
+    domains:
+      - domiframe.com
+      - www.domiframe.com
     disk:
       name: runtime-cache
       mountPath: /opt/render/project/src/belgium-location/cache
       sizeGB: 1
+    autoDeployTrigger: "off"
