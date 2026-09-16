@@ -1148,9 +1148,9 @@
             privacyHosting: 'Uygulama, Render altyapısının Frankfurt bölgesinde barındırılır. Olağan web istekleri teknik altyapı ve sunucu günlükleri oluşturabilir.',
             privacyStorageTitle: 'Yerel tarayıcı depolaması',
             privacyStorage: 'Dil ve tema tercihleri, işlevsel arayüz ayarları olarak tarayıcının localStorage alanında en fazla 30 gün saklanabilir. Son adresler kalıcı olarak saklanmaz.',
-            privacyCookies: 'Site kasıtlı olarak reklam veya analiz çerezleri kullanmaz.',
+            privacyCookies: 'Site reklam çerezleri kullanmaz. Toplu ziyaret ve performans istatistikleri için çerez veya localStorage kullanmayan Cloudflare Web Analytics kullanılır.',
             privacyPurposeTitle: 'İşleme amaçları',
-            privacyPurpose: 'Bilgiler yalnızca adres önerileri sunmak, istenen konum analizini yapmak, haritayı göstermek, dil ve tema tercihlerini hatırlamak ve hizmeti işletip güvenliğini sağlamak için gerektiği ölçüde işlenir.',
+            privacyPurpose: 'Bilgiler yalnızca adres önerileri sunmak, istenen konum analizini yapmak, haritayı göstermek, dil ve tema tercihlerini hatırlamak, toplu ziyaret ve performans istatistiklerini ölçmek ve hizmeti işletip güvenliğini sağlamak için gerektiği ölçüde işlenir.',
             privacySourcesTitle: 'Üçüncü taraf veri kaynakları',
             privacySources: 'OpenStreetMap, Belgian Mobility ve toplu taşıma veri setleri konum ve ulaşım bilgisi kaynaklarıdır; bu uygulamada kullanıcı takip sistemi olarak kullanılmaz. Kaynak bilgileri için Veri kaynakları bölümüne bakabilirsiniz.',
             privacyRightsTitle: 'Haklarınız ve iletişim',
@@ -1287,9 +1287,9 @@
             privacyHosting: 'The application is hosted using Render infrastructure in the Frankfurt region. Normal web requests may generate technical infrastructure and server logs.',
             privacyStorageTitle: 'Local browser storage',
             privacyStorage: 'Language and theme preferences may be stored for up to 30 days in browser localStorage as functional interface settings. Recent addresses are not persistently stored.',
-            privacyCookies: 'The site does not intentionally use advertising or analytics cookies.',
+            privacyCookies: 'The site does not use advertising cookies. Cookie-free Cloudflare Web Analytics is used for aggregated visit and performance statistics without using localStorage.',
             privacyPurposeTitle: 'Purpose',
-            privacyPurpose: 'Information is processed only as needed to provide address suggestions, perform the requested location analysis, display the map, remember language and theme preferences, and operate and secure the service.',
+            privacyPurpose: 'Information is processed only as needed to provide address suggestions, perform the requested location analysis, display the map, remember language and theme preferences, measure aggregated visit and performance statistics, and operate and secure the service.',
             privacySourcesTitle: 'Third-party data sources',
             privacySources: 'OpenStreetMap, Belgian Mobility, and public transport datasets provide location and transit information; they are not used as user-tracking systems in this application. See Data sources for attribution.',
             privacyRightsTitle: 'Your rights and contact',
@@ -1426,9 +1426,9 @@
             privacyHosting: 'De toepassing wordt gehost op Render-infrastructuur in de regio Frankfurt. Gewone webverzoeken kunnen technische infrastructuur- en serverlogboeken genereren.',
             privacyStorageTitle: 'Lokale browseropslag',
             privacyStorage: 'Taal- en themavoorkeuren kunnen als functionele interface-instellingen maximaal 30 dagen in localStorage van de browser worden bewaard. Recente adressen worden niet blijvend opgeslagen.',
-            privacyCookies: 'De site gebruikt niet bewust advertentie- of analysecookies.',
+            privacyCookies: 'De site gebruikt geen advertentiecookies. Voor geaggregeerde bezoek- en prestatiestatistieken wordt Cloudflare Web Analytics gebruikt zonder cookies of localStorage.',
             privacyPurposeTitle: 'Doeleinden',
-            privacyPurpose: 'Informatie wordt alleen verwerkt voor zover nodig om adressuggesties te geven, de gevraagde locatieanalyse uit te voeren, de kaart te tonen, taal- en themavoorkeuren te onthouden en de dienst te beheren en beveiligen.',
+            privacyPurpose: 'Informatie wordt alleen verwerkt voor zover nodig om adressuggesties te geven, de gevraagde locatieanalyse uit te voeren, de kaart te tonen, taal- en themavoorkeuren te onthouden, geaggregeerde bezoek- en prestatiestatistieken te meten en de dienst te beheren en beveiligen.',
             privacySourcesTitle: 'Externe gegevensbronnen',
             privacySources: 'OpenStreetMap, Belgian Mobility en openbaarvervoersdatasets leveren locatie- en vervoersinformatie; ze worden in deze toepassing niet gebruikt als systemen om gebruikers te volgen. Raadpleeg Gegevensbronnen voor de bronvermelding.',
             privacyRightsTitle: 'Uw rechten en contact',
@@ -2321,5 +2321,12 @@
       }
     }
 </script>
+<!-- Cloudflare Web Analytics -->
+<script
+  type="module"
+  src="https://static.cloudflareinsights.com/beacon.min.js"
+  data-cf-beacon='{"token":"893310dd5a5e48e9ae88c3aaeecd6a4c"}'>
+</script>
+<!-- End Cloudflare Web Analytics -->
 </body>
 </html>
