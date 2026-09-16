@@ -1069,7 +1069,7 @@
     </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script
-        data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;language&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tr&quot;,&quot;en&quot;,&quot;nl&quot;],&quot;default&quot;:&quot;tr&quot;,&quot;tsType&quot;:&quot;'tr'|'en'|'nl'&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;demoState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;loading&quot;,&quot;results&quot;,&quot;error-notfound&quot;,&quot;error-server&quot;,&quot;error-empty&quot;,&quot;styleguide&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototip — ekran durumu&quot;}}">
+        data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;language&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tr&quot;,&quot;en&quot;,&quot;nl&quot;],&quot;default&quot;:&quot;en&quot;,&quot;tsType&quot;:&quot;'tr'|'en'|'nl'&quot;,&quot;section&quot;:&quot;Görünüm&quot;},&quot;demoState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;loading&quot;,&quot;results&quot;,&quot;error-notfound&quot;,&quot;error-server&quot;,&quot;error-empty&quot;,&quot;styleguide&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototip — ekran durumu&quot;}}">
     class Component extends DCLogic {
       constructor(props) {
         super(props);
@@ -1080,12 +1080,12 @@
         this._recent = [];
         try { localStorage.removeItem('eca-recent'); } catch (e) {}
         const themeFallback = ['light', 'dark'].includes(props.theme) ? props.theme : 'light';
-        const langFallback = ['tr', 'en', 'nl'].includes(props.language) ? props.language : 'tr';
+        const langFallback = ['tr', 'en', 'nl'].includes(props.language) ? props.language : 'en';
         let theme = this.loadPreference(
           'eca-theme', 'eca-theme-saved-at', ['light', 'dark'], themeFallback);
         let lang = this.loadPreference(
           'eca-lang', 'eca-lang-saved-at', ['tr', 'en', 'nl'], langFallback);
-        if (!this.T()[lang]) lang = 'tr';
+        if (!this.T()[lang]) lang = 'en';
         this.state = Object.assign({
           theme, lang, view: 'home', status: 'results', errorKind: null,
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
