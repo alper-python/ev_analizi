@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ev-analizi-be
+    name: domiframe
     runtime: python
     branch: main
     region: frankfurt
