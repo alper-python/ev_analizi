@@ -25,7 +25,8 @@ from shapely.geometry import Point
 from app_duckdb import (CATS, DEFAULT_RADIUS_M, TOP_N, analyze as analyze_location,
                         analyze_health, analyze_market, analyze_park,
                         analyze_school, analyze_sport, geocode,
-                        query_category, query_market_candidates,
+                        geocode_with_country, query_category,
+                        query_market_candidates,
                         query_school_candidates)
 from market_scoring import (MARKET_SCORING_RADIUS_M, MARKET_TYPE_WEIGHTS,
                             deduplicate_market_pois, market_type)
@@ -85,7 +86,7 @@ class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
             params={
                 "text": query,
                 "apiKey": self.api_key,
-                "filter": "countrycode:be",
+                "filter": "countrycode:be,nl",
                 "lang": lang,
                 "limit": min(int(limit), 6),
                 "format": "json",
@@ -117,10 +118,15 @@ class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
                 continue
             if not label:
                 continue
+            country_code = str(item.get("country_code") or "").strip().lower()
+            if country_code not in COUNTRY_DATASETS:
+                continue
+
             suggestions.append({
                 "label": label,
                 "lat": lat,
                 "lon": lon,
+                "country_code": country_code,
                 "result_type": str(item.get("result_type") or "unknown"),
             })
             if len(suggestions) >= limit:
@@ -687,6 +693,7 @@ def _run_preview_analysis(lat, lon, display_address, radius, topn, lang,
             for category in CATS
         ]
     payload = {"display_address": display_address, "lat": lat, "lon": lon,
+               "country_code": country_code,
                "radius": radius, "lang": lang, "overall": result["overall"],
                "categories": categories, "data_mode": DATA_MODE,
                "data_notice": DEMO_NOTICES[lang] if DATA_MODE == "demo" else None}
@@ -764,6 +771,7 @@ def _analyze_api_response():
     if not isinstance(body, dict):
         return _json_error("invalid_request", "A JSON object is required.", 400)
 
+    country_code_explicit = "country_code" in body and body["country_code"] is not None
     country_code = body.get("country_code", "be")
     if not isinstance(country_code, str):
         return _json_error("invalid_request", "Unsupported country.", 400)
@@ -815,22 +823,28 @@ def _analyze_api_response():
         return _json_error(
             "invalid_request", "Provide an address or coordinates.", 400)
 
+    if not has_lat:
+        if DATA_MODE == "demo":
+            lat, lon, display_address = DEMO_LAT, DEMO_LON, f"{address} — DEMO"
+        else:
+            try:
+                lat, lon, display_address, geocoded_country = geocode_with_country(address)
+            except RuntimeError:
+                return _json_error(
+                    "address_not_found", "Address could not be geocoded.", 400)
+
+            if not country_code_explicit:
+                if geocoded_country not in COUNTRY_DATASETS:
+                    return _json_error(
+                        "invalid_request", "Unsupported country.", 400)
+                country_code = geocoded_country
+
     readiness = _runtime_readiness(country_code=country_code)
     if not readiness["ready"]:
         _log_unready_runtime(readiness)
         return _json_error(
             "service_unavailable",
             "Required analysis data is temporarily unavailable.", 503)
-
-    if not has_lat:
-        if DATA_MODE == "demo":
-            lat, lon, display_address = DEMO_LAT, DEMO_LON, f"{address} — DEMO"
-        else:
-            try:
-                lat, lon, display_address = geocode(address)
-            except RuntimeError:
-                return _json_error(
-                    "address_not_found", "Address could not be geocoded.", 400)
 
     return jsonify(_run_preview_analysis(
         lat, lon, display_address, radius, topn, lang, country_code=country_code))

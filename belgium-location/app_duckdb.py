@@ -78,6 +78,30 @@ def geocode(address):
     if not loc: raise RuntimeError("Adres geocode edilemedi.")
     return loc.latitude, loc.longitude, loc.address
 
+
+def geocode_with_country(address):
+    """Geocode a BE/NL address and return its ISO country code."""
+    geocoder = Nominatim(user_agent="be-poi-cache/1.3")
+    rl = RateLimiter(geocoder.geocode, min_delay_seconds=1.0)
+    loc = rl(
+        address,
+        addressdetails=True,
+        country_codes="be,nl",
+    )
+    if not loc:
+        raise RuntimeError("Adres geocode edilemedi.")
+
+    raw = loc.raw if isinstance(loc.raw, dict) else {}
+    address_details = raw.get("address")
+    if not isinstance(address_details, dict):
+        address_details = {}
+
+    country_code = str(
+        address_details.get("country_code") or ""
+    ).strip().lower()
+
+    return loc.latitude, loc.longitude, loc.address, country_code
+
 # Alt-skor (tür ağırlıkları) — sıralama için; puanlamadan bağımsız
 SCORES = {
     "transit": """

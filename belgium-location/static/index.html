@@ -1768,7 +1768,12 @@
         if (this.addrEl) this.addrEl.value = suggestion.label;
         this.setState({
           address: suggestion.label,
-          selectedCoords: { label: suggestion.label, lat: suggestion.lat, lon: suggestion.lon },
+          selectedCoords: {
+            label: suggestion.label,
+            lat: suggestion.lat,
+            lon: suggestion.lon,
+            country_code: suggestion.country_code
+          },
           suggestions: [], suggestionMessage: '', suggestionIndex: -1
         });
       }
@@ -1843,7 +1848,12 @@
         const body = { radius: r, lang: this.state.lang, topn: 20 };
         const cm = addr.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*,\s*(-?\d+(?:[.,]\d+)?)\s*$/);
         const selected = opts.coords || (this.state.selectedCoords && this.state.selectedCoords.label === addr ? this.state.selectedCoords : null);
-        if (selected) { body.address = addr; body.lat = selected.lat; body.lon = selected.lon; }
+        if (selected) {
+          body.address = addr;
+          body.lat = selected.lat;
+          body.lon = selected.lon;
+          body.country_code = selected.country_code || 'be';
+        }
         else if (cm) { body.lat = parseFloat(cm[1].replace(',', '.')); body.lon = parseFloat(cm[2].replace(',', '.')); }
         else { body.address = addr; }
 
@@ -2060,7 +2070,12 @@
           pick: () => {
             if (!S.data || S.refreshing || S.data.radius === v) return;
             this.doSearch(S.address || S.data.display_address, v, {
-              preserve: true, coords: { lat: S.data.lat, lon: S.data.lon }
+              preserve: true,
+              coords: {
+                lat: S.data.lat,
+                lon: S.data.lon,
+                country_code: S.data.country_code || 'be'
+              }
             });
           },
           style: S.radius === v

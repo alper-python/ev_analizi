@@ -79,7 +79,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             calls.append((url, params, timeout))
             return FakeResponse({"results": [
                 {"formatted": "Bondgenotenlaan 1, Leuven, België", "lat": 50.88,
-                 "lon": 4.70, "result_type": "amenity"},
+                 "lon": 4.70, "country_code": "be", "result_type": "amenity"},
                 {"formatted": "", "lat": 50.0, "lon": 4.0},
                 {"formatted": "Invalid coordinates", "lat": "bad", "lon": 4.0},
             ]})
@@ -91,9 +91,10 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             "label": "Bondgenotenlaan 1, Leuven, België",
             "lat": 50.88,
             "lon": 4.70,
+            "country_code": "be",
             "result_type": "amenity",
         }])
-        self.assertEqual(calls[0][1]["filter"], "countrycode:be")
+        self.assertEqual(calls[0][1]["filter"], "countrycode:be,nl")
         self.assertEqual(calls[0][1]["lang"], "en")
         self.assertEqual(calls[0][1]["limit"], 6)
         self.assertEqual(calls[0][1]["format"], "json")
@@ -103,9 +104,11 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         provider = server.GeoapifyAddressSuggestionProvider(
             "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"results": [
                 {"formatted": "Gijmelstraat 56, 3200 Aarschot, Belgium",
-                 "lat": 51.0034977, "lon": 4.8405107, "result_type": "building"},
+                 "lat": 51.0034977, "lon": 4.8405107,
+                 "country_code": "be", "result_type": "building"},
                 {"formatted": "Gijmelstraat, 3200 Aarschot, Belgium",
-                 "lat": "51.003", "lon": "4.841", "result_type": "street"},
+                 "lat": "51.003", "lon": "4.841",
+                 "country_code": "be", "result_type": "street"},
             ]}))
         with patch.object(server, "ADDRESS_PROVIDER", provider):
             response = self.client.get(
@@ -115,7 +118,8 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         self.assertEqual(len(payload["suggestions"]), 2)
         self.assertEqual(payload["suggestions"][0], {
             "label": "Gijmelstraat 56, 3200 Aarschot, Belgium",
-            "lat": 51.0034977, "lon": 4.8405107, "result_type": "building",
+            "lat": 51.0034977, "lon": 4.8405107,
+            "country_code": "be", "result_type": "building",
         })
 
     def test_empty_results_are_available_but_have_no_suggestions(self):
@@ -129,14 +133,14 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         provider = server.GeoapifyAddressSuggestionProvider(
             "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"results": [
                 None, "wrong", {"formatted": "Missing coordinates"},
-                {"formatted": "Valid", "lat": 50.1, "lon": 4.1},
+                {"formatted": "Valid", "lat": 50.1, "lon": 4.1, "country_code": "be"},
             ]}))
         with patch.object(server, "ADDRESS_PROVIDER", provider):
             response = self.client.get("/api/address-suggestions?q=Valid&lang=nl")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["suggestions"], [{
             "label": "Valid", "lat": 50.1, "lon": 4.1,
-            "result_type": "unknown",
+            "country_code": "be", "result_type": "unknown",
         }])
 
     def test_geojson_properties_are_supported_safely(self):
@@ -144,11 +148,11 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"features": [
                 {"type": "Feature", "properties": {
                     "formatted": "Leuven, Belgium", "lat": 50.88,
-                    "lon": 4.70, "result_type": "city"}},
+                    "lon": 4.70, "country_code": "be", "result_type": "city"}},
             ]}))
         self.assertEqual(provider.suggest("Leuven", "en"), [{
             "label": "Leuven, Belgium", "lat": 50.88, "lon": 4.70,
-            "result_type": "city",
+            "country_code": "be", "result_type": "city",
         }])
 
     def test_key_configured_after_import_is_resolved_at_request_time(self):
@@ -431,8 +435,8 @@ class AnalyzeValidationApiTests(unittest.TestCase):
     def test_valid_address_string_is_geocoded_and_accepted(self):
         result = {"categories": [], "overall": 0.0}
         with (patch.object(server, "DATA_MODE", "real"),
-              patch.object(server, "geocode",
-                           return_value=(50.8795, 4.7023, "Leuven, Belgium")),
+              patch.object(server, "geocode_with_country",
+                           return_value=(50.8795, 4.7023, "Leuven, Belgium", "be")),
               patch.object(server, "_run_preview_analysis",
                            return_value=result) as analysis):
             response = self.client.post(
@@ -481,7 +485,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
 
     def test_address_not_found_has_a_distinct_json_error(self):
         with (patch.object(server, "DATA_MODE", "real"),
-              patch.object(server, "geocode",
+              patch.object(server, "geocode_with_country",
                            side_effect=RuntimeError("not found"))):
             response = self.client.post(
                 "/api/analyze", json={"address": "Missing Belgian address"})
@@ -493,7 +497,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
     def test_unexpected_geocoder_failure_uses_generic_json_500(self):
         private_detail = "private geocoder implementation detail"
         with (patch.object(server, "DATA_MODE", "real"),
-              patch.object(server, "geocode",
+              patch.object(server, "geocode_with_country",
                            side_effect=ValueError(private_detail)),
               self.assertLogs(server.LOGGER, level="ERROR")):
             response = self.client.post(
@@ -883,9 +887,9 @@ class PrivacyNoticeContentTests(unittest.TestCase):
             "Son adresler kalıcı olarak saklanmaz",
             "Recente adressen worden niet blijvend opgeslagen",
             "Recent addresses are not persistently stored",
-            "reklam veya analiz çerezleri kullanmaz",
-            "niet bewust advertentie- of analysecookies",
-            "does not intentionally use advertising or analytics cookies",
+            "Site reklam çerezleri kullanmaz. Toplu ziyaret ve performans istatistikleri için çerez veya localStorage kullanmayan Cloudflare Web Analytics kullanılır.",
+            "De site gebruikt geen advertentiecookies. Voor geaggregeerde bezoek- en prestatiestatistieken wordt Cloudflare Web Analytics gebruikt zonder cookies of localStorage.",
+            "The site does not use advertising cookies. Cookie-free Cloudflare Web Analytics is used for aggregated visit and performance statistics without using localStorage.",
         ):
             self.assertIn(text, self.frontend)
 
@@ -1010,7 +1014,7 @@ class CountryDatasetAnalysisTests(unittest.TestCase):
         self.assertEqual(category.call_count, 6)
         self.assertTrue(all(call.kwargs["dataset"] is dataset
                             for call in category.call_args_list))
-        self.assertNotIn("country_code", first)
+        self.assertEqual(first["country_code"], "be")
 
 
 class RadiusReanalysisApiTests(unittest.TestCase):
