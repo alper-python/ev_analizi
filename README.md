@@ -1,9 +1,15 @@
 # DomiFrame
 **Property Intelligence**
 
-Current public module: **Nearby Access Score — Belgium**
+Current public module: **Nearby Access Score — Belgium & Netherlands**
 
-Nearby Access Score analyzes access to selected everyday amenities and services around an address in Belgium. It reports separate scores for:
+Supported countries:
+- Belgium
+- Netherlands
+
+Address search and Nearby Access analysis are currently available for both Belgium and the Netherlands.
+
+Nearby Access Score analyzes access to selected everyday amenities and services around an address in Belgium or the Netherlands. It reports separate scores for:
 
 - Market
 - School
@@ -59,7 +65,8 @@ Displayed walking and driving estimates are derived from straight-line distance 
 ## Data sources
 
 - [OpenStreetMap](https://www.openstreetmap.org/copyright) provides POI and geographic source data.
-- The [Belgian Mobility Open Data Portal](https://data.belgianmobility.io/) provides public transport data for De Lijn, STIB/MIVB, TEC, and SNCB/NMBS.
+- The [Belgian Mobility Open Data Portal](https://data.belgianmobility.io/) provides public transport data for De Lijn, STIB/MIVB, TEC, and SNCB/NMBS in Belgium.
+- [OVapi](https://gtfs.ovapi.nl/nl/) provides national public transport GTFS data for the Netherlands.
 - [Geoapify](https://www.geoapify.com/) supports address autocomplete and geocoding.
 - [Stadia Maps](https://stadiamaps.com/), [OpenMapTiles](https://openmaptiles.org/), and OpenStreetMap provide the map background and attribution chain.
 
@@ -86,7 +93,7 @@ See the in-app **Privacy** notice for details, including information about techn
 
 ## Runtime caches
 
-The production runtime requires exactly these seven Parquet files under `belgium-location/cache/`:
+The production runtime currently uses seven Parquet files per supported country under `belgium-location/cache/`:
 
 ```text
 cache/be_poi.parquet
@@ -96,6 +103,14 @@ cache/be_transit_service_summary.parquet
 cache/be_rail_service.parquet
 cache/be_park_destinations.parquet
 cache/be_sport_destinations.parquet
+
+cache/nl_poi.parquet
+cache/nl_poi_poly.parquet
+cache/nl_transit_service_stops.parquet
+cache/nl_transit_service_summary.parquet
+cache/nl_rail_service.parquet
+cache/nl_park_destinations.parquet
+cache/nl_sport_destinations.parquet
 ```
 
 Runtime readiness is fail-closed. If required data is missing, corrupt, or schema-invalid, analysis returns a service-unavailable response instead of silently producing partial scores. Build-only intermediate files are not runtime requirements.
@@ -170,7 +185,7 @@ The Render Blueprint is defined in `render.yaml`. Production deploys from `main`
 
 ## Current limitations
 
-- The application covers Belgium only.
+- The application currently supports Belgium and the Netherlands only.
 - Walking and driving figures are approximations; real routing is not implemented.
 - Transit scoring does not use realtime service data.
 - Scores cover selected nearby-access dimensions only.
