@@ -172,6 +172,7 @@ class RuntimeReadinessApiTests(unittest.TestCase):
     def _assert_unready(self, paths):
         readiness.reset_runtime_readiness_cache()
         with (patch.multiple(server, **self._server_globals(paths)),
+              patch.dict(server.COUNTRY_DATASETS, {"be": paths}),
               self.assertLogs(server.LOGGER, level="ERROR")):
             health = self.client.get("/api/health")
             analyze = self.client.post("/api/analyze", json=self._analyze_payload())
@@ -188,6 +189,7 @@ class RuntimeReadinessApiTests(unittest.TestCase):
     def test_all_valid_assets_make_health_and_analysis_ready(self):
         result = {"categories": [{"key": "market", "count": 1}], "overall": 1.0}
         with (patch.multiple(server, **self._server_globals(self.paths)),
+              patch.dict(server.COUNTRY_DATASETS, {"be": self.paths}),
               patch.object(server, "_run_preview_analysis", return_value=result)):
             health = self.client.get("/api/health")
             analyze = self.client.post("/api/analyze", json=self._analyze_payload())
@@ -203,6 +205,43 @@ class RuntimeReadinessApiTests(unittest.TestCase):
     def test_missing_generic_node_fails_closed(self):
         paths = dict(self.paths); paths["poi_nodes"] = str(self.root / "missing-node.parquet")
         self._assert_unready(paths)
+
+    def test_missing_or_invalid_nl_assets_block_only_nl_analysis(self):
+        corrupt = self.root / "corrupt-nl.parquet"
+        corrupt.write_bytes(b"not parquet")
+        for failed_path in (self.root / "missing-nl.parquet", corrupt):
+            with self.subTest(path=failed_path.name):
+                nl_paths = {**self.paths, "poi_nodes": str(failed_path)}
+                readiness.reset_runtime_readiness_cache()
+                with (patch.dict(server.COUNTRY_DATASETS, {"be": self.paths, "nl": nl_paths}),
+                      patch.object(server, "_run_preview_analysis", return_value={"overall": 1.0}) as analysis,
+                      self.assertLogs(server.LOGGER, level="ERROR")):
+                    nl_response = self.client.post("/api/analyze", json={
+                        **self._analyze_payload(), "country_code": "nl"})
+                    be_response = self.client.post("/api/analyze", json=self._analyze_payload())
+                    health = self.client.get("/api/health")
+                self.assertEqual(nl_response.status_code, 503)
+                self.assertEqual(nl_response.get_json()["error"]["code"], "service_unavailable")
+                self.assertEqual(be_response.status_code, 200)
+                self.assertEqual(health.status_code, 200)
+                analysis.assert_called_once()
+                self.assertEqual(analysis.call_args.kwargs["country_code"], "be")
+
+    def test_nl_proceeds_when_be_unready_but_health_remains_be(self):
+        be_paths = {**self.paths, "poi_nodes": str(self.root / "missing-be.parquet")}
+        with (patch.dict(server.COUNTRY_DATASETS, {"be": be_paths, "nl": self.paths}),
+              patch.object(server, "_run_preview_analysis", return_value={"overall": 1.0}) as analysis,
+              self.assertLogs(server.LOGGER, level="ERROR")):
+            be_response = self.client.post("/api/analyze", json=self._analyze_payload())
+            nl_response = self.client.post("/api/analyze", json={
+                **self._analyze_payload(), "country_code": " NL "})
+            health = self.client.get("/api/health")
+        self.assertEqual(be_response.status_code, 503)
+        self.assertEqual(nl_response.status_code, 200)
+        self.assertEqual(health.status_code, 503)
+        self.assertFalse(health.get_json()["ready"])
+        analysis.assert_called_once()
+        self.assertEqual(analysis.call_args.kwargs["country_code"], "nl")
 
     def test_missing_generic_polygon_fails_closed(self):
         paths = dict(self.paths); paths["poi_polygons"] = str(self.root / "missing-poly.parquet")

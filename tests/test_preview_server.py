@@ -470,7 +470,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
 
     def test_unsupported_or_invalid_country_returns_controlled_400(self):
         with patch.object(server, "_run_preview_analysis") as analysis:
-            for country in ("nl", "", None, True, 1, [], {}):
+            for country in ("de", "", None, True, 1, [], {}):
                 with self.subTest(country=country):
                     response = self.client.post("/api/analyze", json={
                         "lat": 50.88, "lon": 4.70, "country_code": country,
@@ -962,10 +962,23 @@ class CountryDatasetAnalysisTests(unittest.TestCase):
     def tearDown(self):
         server._result_cache.clear()
 
-    def test_only_belgium_maps_the_existing_seven_runtime_paths(self):
-        self.assertEqual(set(server.COUNTRY_DATASETS), {"be"})
+    def test_belgium_maps_the_existing_seven_runtime_paths(self):
+        self.assertEqual(set(server.COUNTRY_DATASETS), {"be", "nl"})
         self.assertEqual(server.COUNTRY_DATASETS["be"], server._runtime_asset_paths())
         self.assertEqual(len(server.COUNTRY_DATASETS["be"]), 7)
+
+    def test_netherlands_maps_all_seven_cache_paths(self):
+        filenames = {
+            "poi_nodes": "nl_poi.parquet", "poi_polygons": "nl_poi_poly.parquet",
+            "park_destinations": "nl_park_destinations.parquet",
+            "sport_destinations": "nl_sport_destinations.parquet",
+            "transit_service_stops": "nl_transit_service_stops.parquet",
+            "transit_service_summary": "nl_transit_service_summary.parquet",
+            "rail_service": "nl_rail_service.parquet",
+        }
+        self.assertEqual(server._runtime_asset_paths("nl"), {
+            key: str(server.BASE_DIR / "cache" / filename)
+            for key, filename in filenames.items()})
 
     def test_selected_dataset_is_forwarded_and_cache_key_includes_country(self):
         dataset = {name: "fixture-" + name

@@ -346,6 +346,15 @@ COUNTRY_DATASETS = {
         "transit_service_summary": TRANSIT_SUMMARY_PATH,
         "rail_service": RAIL_SERVICE_PATH,
     },
+    "nl": {
+        "poi_nodes": str(BASE_DIR / "cache" / "nl_poi.parquet"),
+        "poi_polygons": str(BASE_DIR / "cache" / "nl_poi_poly.parquet"),
+        "park_destinations": str(BASE_DIR / "cache" / "nl_park_destinations.parquet"),
+        "sport_destinations": str(BASE_DIR / "cache" / "nl_sport_destinations.parquet"),
+        "transit_service_stops": str(BASE_DIR / "cache" / "nl_transit_service_stops.parquet"),
+        "transit_service_summary": str(BASE_DIR / "cache" / "nl_transit_service_summary.parquet"),
+        "rail_service": str(BASE_DIR / "cache" / "nl_rail_service.parquet"),
+    },
 }
 # Demo caches remain available as explicit test fixtures, but production runtime
 # selection never falls back to them when required Belgium data is unavailable.
@@ -384,21 +393,13 @@ def _rate_limit_error(_error):
         "rate_limited", "Too many requests. Please try again shortly.", 429)
 
 
-def _runtime_asset_paths():
-    return {
-        "poi_nodes": NODES_PATH,
-        "poi_polygons": POLYS_PATH,
-        "transit_service_stops": TRANSIT_STOPS_PATH,
-        "transit_service_summary": TRANSIT_SUMMARY_PATH,
-        "rail_service": RAIL_SERVICE_PATH,
-        "park_destinations": PARK_PATH,
-        "sport_destinations": SPORT_PATH,
-    }
+def _runtime_asset_paths(country_code="be"):
+    return COUNTRY_DATASETS[country_code]
 
 
-def _runtime_readiness(force=False):
+def _runtime_readiness(force=False, country_code="be"):
     """Single server boundary for cached runtime-data readiness."""
-    return check_runtime_readiness(_runtime_asset_paths(), force=force)
+    return check_runtime_readiness(_runtime_asset_paths(country_code), force=force)
 
 
 def _optional_public_string(value, maximum=300):
@@ -814,7 +815,7 @@ def _analyze_api_response():
         return _json_error(
             "invalid_request", "Provide an address or coordinates.", 400)
 
-    readiness = _runtime_readiness()
+    readiness = _runtime_readiness(country_code=country_code)
     if not readiness["ready"]:
         _log_unready_runtime(readiness)
         return _json_error(

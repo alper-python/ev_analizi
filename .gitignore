@@ -31,3 +31,5 @@ data/**
 # Büyük dosya türlerini de garantiye al
 *.pbf
 *.parquet
+
+/belgium-location/data/*.zip
