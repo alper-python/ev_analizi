@@ -49,6 +49,9 @@ TRANSIT_SOURCE_IDENTITIES = (
     ("tec", "TEC", "local"),
     ("sncb", "SNCB/NMBS", "rail"),
 )
+
+NL_TRANSIT_SOURCE_PROVIDER = "OVapi"
+NL_TRANSIT_SOURCE_PORTAL_URL = "https://gtfs.ovapi.nl/nl/gtfs-nl.zip"
 LABELS = {
     "tr": {"school": "Okul", "market": "Market", "health": "Sağlık", "transit": "Ulaşım", "park": "Park", "sport": "Spor"},
     "en": {"school": "School", "market": "Groceries", "health": "Health", "transit": "Transit", "park": "Park", "sport": "Sports"},
@@ -454,7 +457,17 @@ def _read_transit_provenance(path, source_group):
         return {}
 
 
-def _public_transit_sources():
+def _public_transit_sources(country_code="be"):
+    if country_code == "nl":
+        return [{
+            "key": "nl_gtfs",
+            "operator": "Netherlands national public transport GTFS",
+            "source_provider": NL_TRANSIT_SOURCE_PROVIDER,
+            "source_url": NL_TRANSIT_SOURCE_PORTAL_URL,
+            "feed_version": None,
+            "dataset_updated_at": None,
+        }]
+
     source_documents = {
         "local": _read_transit_provenance(TRANSIT_SUMMARY_PATH, "local"),
         "rail": _read_transit_provenance(RAIL_SERVICE_PATH, "rail"),
@@ -719,7 +732,13 @@ def health():
 
 @app.get("/api/data-sources")
 def data_sources_api():
-    return jsonify({"transit": _public_transit_sources()})
+    country_code = str(request.args.get("country_code", "be")).strip().lower()
+    if country_code not in COUNTRY_DATASETS:
+        return _json_error("invalid_request", "Unsupported country.", 400)
+    return jsonify({
+        "country_code": country_code,
+        "transit": _public_transit_sources(country_code),
+    })
 
 
 @app.get("/api/address-suggestions")

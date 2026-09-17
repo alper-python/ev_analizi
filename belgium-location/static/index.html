@@ -994,7 +994,7 @@
                         <a href="https://stadiamaps.com/attribution/" target="_blank" rel="noopener noreferrer">Stadia Maps</a>
                         <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a>
                         <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Geoapify</a>
-                        <a href="https://data.belgianmobility.io/" target="_blank" rel="noopener noreferrer">Belgian Mobility</a>
+                        <a href="{{ transitSourcePortalUrl }}" target="_blank" rel="noopener noreferrer">{{ transitSourcePortalLabel }}</a>
                     </div>
                     <p style="margin:0;color:var(--muted);font:500 12px/1.55 Manrope">{{ t.transitDataSource }}</p>
                     <div aria-label="{{ t.transitOperators }}" style="display:grid;gap:5px;margin-top:9px;color:var(--muted);font:600 11px/1.45 Manrope">
@@ -1132,7 +1132,7 @@
             footer: 'Veriler © OpenStreetMap katkıda bulunanları', styleGuide: 'Stil rehberi',
             osmContributors: 'OpenStreetMap katkıda bulunanları', dataSources: 'Veri kaynakları', close: 'Kapat',
             dataSourcesIntro: 'Harita, adres ve toplu taşıma bilgileri aşağıdaki kaynaklardan sağlanır.',
-            transitDataSource: 'Statik GTFS verileri Belgian Mobility Open Data Portal üzerinden alınır.',
+            transitDataSource: 'Statik GTFS verileri ilgili açık toplu taşıma veri kaynağından alınır.',
             transitOperators: 'Toplu taşıma işletmecileri',
             transitUpdateUnavailable: 'Güncelleme tarihi mevcut değil',
             privacyLink: 'Gizlilik', privacyTitle: 'Gizlilik bildirimi',
@@ -1152,7 +1152,7 @@
             privacyPurposeTitle: 'İşleme amaçları',
             privacyPurpose: 'Bilgiler yalnızca adres önerileri sunmak, istenen konum analizini yapmak, haritayı göstermek, dil ve tema tercihlerini hatırlamak, toplu ziyaret ve performans istatistiklerini ölçmek ve hizmeti işletip güvenliğini sağlamak için gerektiği ölçüde işlenir.',
             privacySourcesTitle: 'Üçüncü taraf veri kaynakları',
-            privacySources: 'OpenStreetMap, Belgian Mobility ve toplu taşıma veri setleri konum ve ulaşım bilgisi kaynaklarıdır; bu uygulamada kullanıcı takip sistemi olarak kullanılmaz. Kaynak bilgileri için Veri kaynakları bölümüne bakabilirsiniz.',
+            privacySources: 'OpenStreetMap ve açık toplu taşıma veri setleri konum ve ulaşım bilgisi kaynaklarıdır; bu uygulamada kullanıcı takip sistemi olarak kullanılmaz. Kaynak bilgileri için Veri kaynakları bölümüne bakabilirsiniz.',
             privacyRightsTitle: 'Haklarınız ve iletişim',
             privacyRights: 'Belçika ve AB’de, uygulanabildiği ölçüde erişim, düzeltme, silme, işlemeyi kısıtlama ve itiraz haklarınız olabilir. Ayrıca Belçika Veri Koruma Kurumuna şikâyette bulunabilirsiniz.',
             privacyContact: 'Hizmetle ilgili kişisel veriler hakkında soru veya talep için:',
@@ -1271,7 +1271,7 @@
             footer: 'Data © OpenStreetMap contributors', styleGuide: 'Style guide',
             osmContributors: 'OpenStreetMap contributors', dataSources: 'Data sources', close: 'Close',
             dataSourcesIntro: 'Map, address, and public transport information is provided by the following sources.',
-            transitDataSource: 'Static GTFS data is obtained through the Belgian Mobility Open Data Portal.',
+            transitDataSource: 'Static GTFS data is obtained from the relevant open public transport data source.',
             transitOperators: 'Public transport operators',
             transitUpdateUnavailable: 'Data update date unavailable',
             privacyLink: 'Privacy', privacyTitle: 'Privacy notice',
@@ -1291,7 +1291,7 @@
             privacyPurposeTitle: 'Purpose',
             privacyPurpose: 'Information is processed only as needed to provide address suggestions, perform the requested location analysis, display the map, remember language and theme preferences, measure aggregated visit and performance statistics, and operate and secure the service.',
             privacySourcesTitle: 'Third-party data sources',
-            privacySources: 'OpenStreetMap, Belgian Mobility, and public transport datasets provide location and transit information; they are not used as user-tracking systems in this application. See Data sources for attribution.',
+            privacySources: 'OpenStreetMap and open public transport datasets provide location and transit information; they are not used as user-tracking systems in this application. See Data sources for attribution.',
             privacyRightsTitle: 'Your rights and contact',
             privacyRights: 'In Belgium and the EU, you may have rights under applicable data protection law, including access, correction, deletion, restriction, and objection where applicable. You may also lodge a complaint with the Belgian Data Protection Authority.',
             privacyContact: 'For privacy questions or requests concerning personal data related to the service, contact:',
@@ -1410,7 +1410,7 @@
             footer: 'Data © OpenStreetMap-bijdragers', styleGuide: 'Stijlgids',
             osmContributors: 'OpenStreetMap-bijdragers', dataSources: 'Gegevensbronnen', close: 'Sluiten',
             dataSourcesIntro: 'Kaart-, adres- en openbaarvervoersinformatie wordt geleverd door de volgende bronnen.',
-            transitDataSource: 'Statische GTFS-gegevens worden verkregen via het Belgian Mobility Open Data Portal.',
+            transitDataSource: 'Statische GTFS-gegevens worden verkregen via de relevante open gegevensbron voor openbaar vervoer.',
             transitOperators: 'Openbaarvervoermaatschappijen',
             transitUpdateUnavailable: 'Datum van gegevensupdate niet beschikbaar',
             privacyLink: 'Privacy', privacyTitle: 'Privacyverklaring',
@@ -1430,7 +1430,7 @@
             privacyPurposeTitle: 'Doeleinden',
             privacyPurpose: 'Informatie wordt alleen verwerkt voor zover nodig om adressuggesties te geven, de gevraagde locatieanalyse uit te voeren, de kaart te tonen, taal- en themavoorkeuren te onthouden, geaggregeerde bezoek- en prestatiestatistieken te meten en de dienst te beheren en beveiligen.',
             privacySourcesTitle: 'Externe gegevensbronnen',
-            privacySources: 'OpenStreetMap, Belgian Mobility en openbaarvervoersdatasets leveren locatie- en vervoersinformatie; ze worden in deze toepassing niet gebruikt als systemen om gebruikers te volgen. Raadpleeg Gegevensbronnen voor de bronvermelding.',
+            privacySources: 'OpenStreetMap en open openbaarvervoersdatasets leveren locatie- en vervoersinformatie; ze worden in deze toepassing niet gebruikt als systemen om gebruikers te volgen. Raadpleeg Gegevensbronnen voor de bronvermelding.',
             privacyRightsTitle: 'Uw rechten en contact',
             privacyRights: 'In België en de EU kunt u, waar van toepassing, rechten hebben op inzage, correctie, verwijdering, beperking en bezwaar. U kunt ook een klacht indienen bij de Belgische Gegevensbeschermingsautoriteit.',
             privacyContact: 'Neem voor privacyvragen of verzoeken over persoonsgegevens in verband met de dienst contact op via:',
@@ -1892,13 +1892,15 @@
         this.setState({ lang, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
       }
 
-      transitSourceRows(t) {
-        const defaults = [
-          { key: 'delijn', operator: 'De Lijn' },
-          { key: 'stib', operator: 'STIB/MIVB' },
-          { key: 'tec', operator: 'TEC' },
-          { key: 'sncb', operator: 'SNCB/NMBS' }
-        ];
+      transitSourceRows(t, countryCode) {
+        const defaults = countryCode === 'nl'
+          ? [{ key: 'nl_gtfs', operator: 'Netherlands national public transport GTFS' }]
+          : [
+              { key: 'delijn', operator: 'De Lijn' },
+              { key: 'stib', operator: 'STIB/MIVB' },
+              { key: 'tec', operator: 'TEC' },
+              { key: 'sncb', operator: 'SNCB/NMBS' }
+            ];
         const received = Array.isArray(this.state.transitSources) ? this.state.transitSources : [];
         const byKey = {};
         received.forEach(source => {
@@ -1916,19 +1918,23 @@
         });
       }
 
-      loadDataSources() {
-        if (this._dataSourcesRequested) return;
-        this._dataSourcesRequested = true;
-        fetch('/api/data-sources')
+      loadDataSources(countryCode) {
+        const country = countryCode === 'nl' ? 'nl' : 'be';
+        if (this._dataSourcesCountry === country) return;
+        this._dataSourcesCountry = country;
+        fetch('/api/data-sources?country_code=' + encodeURIComponent(country))
           .then(response => {
             if (!response.ok) throw new Error('source metadata unavailable');
             return response.json();
           })
           .then(payload => {
+            if (this._dataSourcesCountry !== country) return;
             const transit = payload && Array.isArray(payload.transit) ? payload.transit : [];
             this.setState({ transitSources: transit });
           })
-          .catch(() => this.setState({ transitSources: [] }));
+          .catch(() => {
+            if (this._dataSourcesCountry === country) this.setState({ transitSources: [] });
+          });
       }
 
       componentDidMount() {
@@ -2052,7 +2058,16 @@
         const dark = S.theme === 'dark';
         const narrow = S.isNarrow;
         const stacked = S.viewportWidth < 1200;
-        const transitSources = this.transitSourceRows(t);
+        const dataSourceCountry = (S.data && S.data.country_code)
+          || (S.selectedCoords && S.selectedCoords.country_code)
+          || 'be';
+        const transitSources = this.transitSourceRows(t, dataSourceCountry);
+        const transitSourcePortalUrl = dataSourceCountry === 'nl'
+          ? 'https://gtfs.ovapi.nl/nl/'
+          : 'https://data.belgianmobility.io/';
+        const transitSourcePortalLabel = dataSourceCountry === 'nl'
+          ? 'OVapi'
+          : 'Belgian Mobility';
         const rootStyle = dark
           ? { minHeight: '100vh', '--bg': '#11141b', '--surface': '#1a1f2a', '--ink': '#e9ecf2', '--muted': '#98a1b0', '--line': 'rgba(255,255,255,.09)', '--chip': '#242b38', '--shadow': '0 1px 3px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25)' }
           : { minHeight: '100vh' };
@@ -2309,13 +2324,23 @@
           dataSourcesOpen: S.dataSourcesOpen,
           privacyOpen: S.privacyOpen,
           transitSources,
-          openDataSources: e => { if (e && e.preventDefault) e.preventDefault(); this.loadDataSources(); this.setState({ dataSourcesOpen: true }); },
+          transitSourcePortalUrl,
+          transitSourcePortalLabel,
+          openDataSources: e => {
+            if (e && e.preventDefault) e.preventDefault();
+            this.loadDataSources(dataSourceCountry);
+            this.setState({ dataSourcesOpen: true });
+          },
           closeDataSources: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ dataSourcesOpen: false }); },
           keepDataSourcesOpen: e => { if (e && e.stopPropagation) e.stopPropagation(); },
           openPrivacy: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ privacyOpen: true }); },
           closePrivacy: e => { if (e && e.preventDefault) e.preventDefault(); this.setState({ privacyOpen: false }); },
           keepPrivacyOpen: e => { if (e && e.stopPropagation) e.stopPropagation(); },
-          openDataSourcesFromPrivacy: e => { if (e && e.preventDefault) e.preventDefault(); this.loadDataSources(); this.setState({ privacyOpen: false, dataSourcesOpen: true }); },
+          openDataSourcesFromPrivacy: e => {
+            if (e && e.preventDefault) e.preventDefault();
+            this.loadDataSources(dataSourceCountry);
+            this.setState({ privacyOpen: false, dataSourcesOpen: true });
+          },
           openStyle: e => { e.preventDefault(); this.setState({ view: 'style' }); },
           goHome: () => this.setState({ view: 'home', status: 'results', errorKind: null, open: null, hidden: {}, formError: '', refreshing: false, radiusInfoOpen: false, overallInfoOpen: false, calculationPopover: null, dataSourcesOpen: false, privacyOpen: false }),
           onPrint: () => window.print(),

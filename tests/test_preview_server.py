@@ -2193,30 +2193,32 @@ class BasemapAttributionContentTests(unittest.TestCase):
             self.assertIn(label, self.frontend)
         for provider in (
             "OpenStreetMap contributors", "Stadia Maps", "OpenMapTiles",
-            "Geoapify", "Belgian Mobility", "De Lijn", "STIB/MIVB", "TEC",
-            "SNCB/NMBS",
+            "Geoapify", "Belgian Mobility", "OVapi",
+            "De Lijn", "STIB/MIVB", "TEC", "SNCB/NMBS",
+            "Netherlands national public transport GTFS",
         ):
             self.assertIn(provider, self.frontend)
         for feed_wording in (
-            "Statik GTFS verileri Belgian Mobility Open Data Portal",
-            "Static GTFS data is obtained through the Belgian Mobility Open Data Portal.",
-            "Statische GTFS-gegevens worden verkregen via het Belgian Mobility Open Data Portal.",
+            "Statik GTFS verileri ilgili açık toplu taşıma veri kaynağından alınır.",
+            "Static GTFS data is obtained from the relevant open public transport data source.",
+            "Statische GTFS-gegevens worden verkregen via de relevante open gegevensbron voor openbaar vervoer.",
         ):
             self.assertIn(feed_wording, self.frontend)
         self.assertNotRegex(self.frontend, r"GTFS.{0,80}20\d{2}")
 
     def test_transit_source_dates_and_operators_are_rendered_from_runtime_data(self):
         for source in (
-            "fetch('/api/data-sources')",
+            "fetch('/api/data-sources?country_code=' + encodeURIComponent(country))",
             "payload && Array.isArray(payload.transit) ? payload.transit : []",
             "this.setState({ transitSources: transit })",
             "source.dataset_updated_at",
             "'Source: ' + operator + ' – Open Data – ' + date",
             '<sc-for list="{{ transitSources }}" as="source"',
             "{{ source.attribution }}",
+            "const country = countryCode === 'nl' ? 'nl' : 'be';",
+            "if (this._dataSourcesCountry === country) return;",
         ):
             self.assertIn(source, self.frontend)
-        self.assertIn("if (this._dataSourcesRequested) return;", self.frontend)
 
     def test_transit_source_fallback_is_localized_and_fetch_failure_is_safe(self):
         for wording in (
@@ -2225,10 +2227,11 @@ class BasemapAttributionContentTests(unittest.TestCase):
             "Data update date unavailable",
         ):
             self.assertIn(wording, self.frontend)
-        self.assertIn(".catch(() => this.setState({ transitSources: [] }))",
-                      self.frontend)
-        self.assertIn("this.loadDataSources(); this.setState({ dataSourcesOpen: true })",
-                      self.frontend)
+        self.assertIn(
+            "if (this._dataSourcesCountry === country) this.setState({ transitSources: [] });",
+            self.frontend,
+        )
+        self.assertIn("this.loadDataSources(dataSourceCountry);", self.frontend)
 
     def test_existing_non_transit_source_links_remain_intact(self):
         for link in (
