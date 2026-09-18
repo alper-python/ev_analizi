@@ -35,6 +35,7 @@ class NearbyBuilding:
     pointcloud_source: str | None
     pointcloud_year: int | None
     pointcloud_unusable: bool | None
+    child_ids: tuple[str, ...]
 
 
 def wgs84_to_rd(
@@ -158,6 +159,10 @@ def summarize_city_object(
         ),
         pointcloud_unusable=attributes.get(
             "rf_pointcloud_unusable"
+        ),
+        child_ids=tuple(
+            str(value)
+            for value in (city_object.get("children") or [])
         ),
     )
 
