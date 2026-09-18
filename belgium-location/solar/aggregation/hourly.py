@@ -1,0 +1,1 @@
+"""Hourly Solar Analysis aggregation."""

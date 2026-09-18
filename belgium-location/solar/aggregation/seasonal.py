@@ -1,0 +1,1 @@
+"""Seasonal Solar Analysis aggregation."""

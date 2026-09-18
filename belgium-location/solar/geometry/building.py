@@ -1,0 +1,1 @@
+"""Target-building geometry extraction."""

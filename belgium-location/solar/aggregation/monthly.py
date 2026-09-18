@@ -1,0 +1,1 @@
+"""Monthly Solar Analysis aggregation."""
