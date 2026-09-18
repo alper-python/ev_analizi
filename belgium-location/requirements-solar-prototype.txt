@@ -6,3 +6,5 @@ embreex==4.4.0
 pvlib==0.15.2
 ijson==3.5.1
 pyproj==3.8.0
+shapely==2.1.2
+mapbox_earcut==2.1.0
