@@ -4,3 +4,5 @@
 trimesh==5.1.0
 embreex==4.4.0
 pvlib==0.15.2
+ijson==3.5.1
+pyproj==3.8.0
