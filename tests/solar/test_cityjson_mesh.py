@@ -275,5 +275,59 @@ class CityJsonMeshTests(unittest.TestCase):
         )
 
 
+
+    def test_triangulation_preserves_source_surface_normal(self):
+        geometry = SelectedPartGeometry(
+            parent_id="orientation-building",
+            part_id="orientation-building-0",
+            lod="2.2",
+            geometry_type="Solid",
+            boundaries=[
+                [
+                    [[0, 1, 2, 3]]
+                ]
+            ],
+            semantics={
+                "surfaces": [
+                    {"type": "RoofSurface"}
+                ],
+                "values": [
+                    [0]
+                ],
+            },
+        )
+
+        # Counter-clockwise XY ordering represents an upward-facing roof.
+        vertices = {
+            0: (0.0, 0.0, 3.0),
+            1: (2.0, 0.0, 3.0),
+            2: (2.0, 2.0, 3.0),
+            3: (0.0, 2.0, 3.0),
+        }
+
+        surface = semantic_surfaces(
+            geometry
+        )[0]
+
+        mesh = triangulate_surface(
+            surface,
+            vertices=vertices,
+        )
+
+        weighted_normal = (
+            mesh.face_normals
+            * mesh.area_faces[:, None]
+        ).sum(axis=0)
+
+        weighted_normal /= np.linalg.norm(
+            weighted_normal
+        )
+
+        self.assertGreater(
+            float(weighted_normal[2]),
+            0.99,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -316,6 +316,13 @@ def triangulate_surface(
 
     exterior = rings_3d[0]
 
+    # Preserve the original CityJSON ring orientation. This is important
+    # because Solar Analysis uses the outward surface normal to determine
+    # whether a roof or facade actually faces the sun.
+    source_normal = _newell_normal(
+        exterior
+    )
+
     origin, axis_u, axis_v = _plane_basis(
         exterior
     )
