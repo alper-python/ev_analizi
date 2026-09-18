@@ -79,14 +79,16 @@ def geocode(address):
     return loc.latitude, loc.longitude, loc.address
 
 
-def geocode_with_country(address):
-    """Geocode a BE/NL address and return its ISO country code."""
+def geocode_with_country(address, country_code):
+    """Geocode within the explicitly selected BE/NL country."""
+    if country_code not in ("be", "nl"):
+        raise ValueError("Unsupported country.")
     geocoder = Nominatim(user_agent="be-poi-cache/1.3")
     rl = RateLimiter(geocoder.geocode, min_delay_seconds=1.0)
     loc = rl(
         address,
         addressdetails=True,
-        country_codes="be,nl",
+        country_codes=country_code,
     )
     if not loc:
         raise RuntimeError("Adres geocode edilemedi.")

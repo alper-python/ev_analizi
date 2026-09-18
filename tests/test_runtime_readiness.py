@@ -166,7 +166,7 @@ class RuntimeReadinessApiTests(unittest.TestCase):
         }
 
     def _analyze_payload(self):
-        return {"address": "Fixture", "lat": 50.0, "lon": 4.0,
+        return {"address": "Fixture", "lat": 50.0, "lon": 4.0, "country_code": "be",
                 "radius": 2500, "topn": 20, "lang": "en"}
 
     def _assert_unready(self, paths):

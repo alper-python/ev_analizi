@@ -334,9 +334,17 @@
                     <p style="margin:0 auto 30px;max-width:540px;text-align:center;color:var(--muted);font:500 15.5px/1.6 Manrope;text-wrap:pretty">
                         {{ t.sub }}</p>
                     <div style="background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px">
+                        <select value="{{ selectedCountry }}" onChange="{{ onCountryChange }}"
+                                aria-label="{{ t.coordinateCountryLabel }}"
+                                aria-invalid="{{ countryInvalid }}"
+                                style="{{ countrySelectStyle }}">
+                            <option value="">{{ t.selectCountryFirst }}</option>
+                            <option value="be">{{ t.belgium }}</option>
+                            <option value="nl">{{ t.netherlands }}</option>
+                        </select>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
                             <div style="flex:1 1 280px;min-width:0;position:relative">
-                                <input ref="{{ addrRef }}" onInput="{{ onAddrInput }}" onKeyDown="{{ onAddrKey }}" placeholder="{{ t.placeholder }}" aria-label="{{ t.addressLabel }}"
+                                <input ref="{{ addrRef }}" onFocus="{{ onCountryRequired }}" onInput="{{ onAddrInput }}" onKeyDown="{{ onAddrKey }}" placeholder="{{ addressPlaceholder }}" aria-label="{{ t.addressLabel }}"
                                        autocomplete="off" aria-autocomplete="list" aria-expanded="{{ suggestionsOpen }}"
                                        style="width:100%;padding:14px 16px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 15px Manrope;outline-color:#2E6FDB;min-width:0;min-height:44px;box-sizing:border-box">
                                 <sc-if value="{{ showSuggestionPanel }}" hint-placeholder-val="{{ false }}">
@@ -361,8 +369,11 @@
                         <div class="provider-credit">
                             <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Powered by Geoapify</a>
                         </div>
-                        <sc-if value="{{ formError }}" hint-placeholder-val="{{ false }}">
-                            <div style="color:#D64545;font:600 12.5px Manrope;margin-top:9px">{{ formError }}</div>
+                        <sc-if value="{{ showFormError }}" hint-placeholder-val="{{ false }}">
+                            <div role="alert"
+                                 style="color:#D64545;font:600 12.5px Manrope;margin-top:9px">
+                                {{ formError }}
+                            </div>
                         </sc-if>
                         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px">
                             <span style="font:700 12px Manrope;color:var(--muted)">{{ t.radius }}</span>
@@ -375,15 +386,10 @@
                                 {{ t.advanced }}
                             </summary>
                             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-                                <input ref="{{ latRef }}" placeholder="{{ t.latPh }}" aria-label="{{ t.latitudeLabel }}"
+                                <input ref="{{ latRef }}" onFocus="{{ onCountryRequired }}" placeholder="{{ t.latPh }}" aria-label="{{ t.latitudeLabel }}"
                                        style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
-                                <input ref="{{ lonRef }}" placeholder="{{ t.lonPh }}" aria-label="{{ t.longitudeLabel }}"
+                                <input ref="{{ lonRef }}" onFocus="{{ onCountryRequired }}" placeholder="{{ t.lonPh }}" aria-label="{{ t.longitudeLabel }}"
                                        style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
-                                <select ref="{{ coordCountryRef }}" aria-label="{{ t.coordinateCountryLabel }}"
-                                        style="flex:0 1 170px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:600 13px Manrope;min-height:44px;box-sizing:border-box">
-                                    <option value="be">{{ t.belgium }}</option>
-                                    <option value="nl">{{ t.netherlands }}</option>
-                                </select>
                                 <button onClick="{{ onCoordSearch }}"
                                         style="padding:11px 18px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 13px Manrope;cursor:pointer"
                                         style-hover="background:var(--chip)">{{ t.searchBtn }}
@@ -1083,7 +1089,10 @@
         this.tileGeneration = 0; this.tileErrorShown = false;
         this.groups = {}; this.mk = {};
         this._recent = [];
-        try { localStorage.removeItem('eca-recent'); } catch (e) {}
+        try {
+          const legacyRecent = JSON.parse(localStorage.getItem('eca-recent') || '[]');
+          if (Array.isArray(legacyRecent)) this._recent = legacyRecent.filter(entry => this.recentLabel(entry));
+        } catch (e) {}
         const themeFallback = ['light', 'dark'].includes(props.theme) ? props.theme : 'light';
         const langFallback = ['tr', 'en', 'nl'].includes(props.language) ? props.language : 'en';
         let theme = this.loadPreference(
@@ -1091,8 +1100,13 @@
         let lang = this.loadPreference(
           'eca-lang', 'eca-lang-saved-at', ['tr', 'en', 'nl'], langFallback);
         if (!this.T()[lang]) lang = 'en';
+        let selectedCountry = null;
+        try {
+          const storedCountry = localStorage.getItem('eca-country');
+          if (['be', 'nl'].includes(storedCountry)) selectedCountry = storedCountry;
+        } catch (e) {}
         this.state = Object.assign({
-          theme, lang, view: 'home', status: 'results', errorKind: null,
+          theme, lang, selectedCountry, view: 'home', status: 'results', errorKind: null,
           radius: 2500, address: '', open: null, hidden: {}, formError: '',
           recent: this.loadRecent(), data: null, refreshing: false,
           suggestions: [], suggestionMessage: '', suggestionIndex: -1,
@@ -1129,6 +1143,7 @@
             brand: 'DomiFrame', h1: 'Yakın Çevre Erişim Skoru',
             sub: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
             placeholder: 'Örn. Grote Markt 9, 3000 Leuven, Belçika', addressLabel: 'Adres', analyze: 'Analiz et', radius: 'Arama yarıçapı',
+            selectCountryFirst: 'Önce bir ülke seçin',
             advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.87871)', lonPh: 'Boylam (4.70143)', latitudeLabel: 'Enlem', longitudeLabel: 'Boylam', coordinateCountryLabel: 'Ülke', belgium: 'Belçika', netherlands: 'Hollanda', searchBtn: 'Ara',
             recent: 'Son aramalar:', vp1t: '6 kategori, tek puan',
             vp1d: 'Okul, market, sağlık, ulaşım, park ve spor ayrı ayrı gösterilir; tek sayı yalnızca ikincil bir özettir.',
@@ -1268,6 +1283,7 @@
             brand: 'DomiFrame', h1: 'Nearby Access Score',
             sub: 'Access to nearby everyday amenities and services',
             placeholder: 'E.g. Grote Markt 9, 3000 Leuven, Belgium', addressLabel: 'Address', analyze: 'Analyze', radius: 'Search radius',
+            selectCountryFirst: 'Select a country first',
             advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.87871)', lonPh: 'Longitude (4.70143)', latitudeLabel: 'Latitude', longitudeLabel: 'Longitude', coordinateCountryLabel: 'Country', belgium: 'Belgium', netherlands: 'Netherlands', searchBtn: 'Search',
             recent: 'Recent searches:', vp1t: '6 categories, one score',
             vp1d: 'Schools, groceries, healthcare, transit, parks and sports are shown separately; the single number is only a secondary summary.',
@@ -1407,6 +1423,7 @@
             brand: 'DomiFrame', h1: 'Nabijheids- en voorzieningenscore',
             sub: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
             placeholder: 'Bijv. Grote Markt 9, 3000 Leuven, België', addressLabel: 'Adres', analyze: 'Analyseer', radius: 'Zoekstraal',
+            selectCountryFirst: 'Selecteer eerst een land',
             advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.87871)', lonPh: 'Lengtegraad (4.70143)', latitudeLabel: 'Breedtegraad', longitudeLabel: 'Lengtegraad', coordinateCountryLabel: 'Land', belgium: 'België', netherlands: 'Nederland', searchBtn: 'Zoek',
             recent: 'Recente zoekopdrachten:', vp1t: '6 categorieën, één score',
             vp1d: 'Scholen, winkels, zorg, vervoer, parken en sport worden afzonderlijk getoond; het ene getal is alleen een secundaire samenvatting.',
@@ -1632,10 +1649,30 @@
         }
       }
       loadRecent() { return this._recent.slice(); }
-      saveRecent(addr) {
-        let recent = this.loadRecent().filter(value => value !== addr);
-        recent.unshift(addr);
+      recentLabel(entry) {
+        return typeof entry === 'string' ? entry : (entry && typeof entry.label === 'string' ? entry.label : '');
+      }
+      saveRecent(entry) {
+        const label = this.recentLabel(entry);
+        const country = typeof entry === 'string' ? null : entry.country_code;
+        let recent = this.loadRecent().filter(value => this.recentLabel(value) !== label
+          || (typeof value === 'string' ? null : value.country_code) !== country);
+        recent.unshift(entry);
         this._recent = recent.slice(0, 4);
+      }
+
+      openRecent(entry) {
+        const label = this.recentLabel(entry);
+        if (!label) return;
+        const country = entry && typeof entry === 'object' ? entry.country_code : null;
+        const run = () => {
+          const coords = entry && Number.isFinite(entry.lat) && Number.isFinite(entry.lon)
+            ? { lat: entry.lat, lon: entry.lon } : null;
+          this.doSearch(label, undefined, coords ? { coords } : undefined);
+        };
+        if (['be', 'nl'].includes(country)) this.setCountry(country, run);
+        else if (this.state.selectedCountry) run();
+        else this.setState({ formError: this.T()[this.state.lang].selectCountryFirst });
       }
 
       fmtDist(m) { return m < 1000 ? m + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
@@ -1769,7 +1806,21 @@
         return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
       }
 
+      setCountry(value, afterChange) {
+        this._countryChoiceGeneration = (this._countryChoiceGeneration || 0) + 1;
+        const selectedCountry = ['be', 'nl'].includes(value) ? value : null;
+        clearTimeout(this._ac);
+        this._acGeneration = (this._acGeneration || 0) + 1;
+        try {
+          if (selectedCountry) localStorage.setItem('eca-country', selectedCountry);
+          else localStorage.removeItem('eca-country');
+        } catch (e) {}
+        this.setState({ selectedCountry, selectedCoords: null,
+          suggestions: [], suggestionMessage: '', suggestionIndex: -1, formError: '' }, afterChange);
+      }
+
       selectSuggestion(suggestion) {
+        if (!this.state.selectedCountry || suggestion.country_code !== this.state.selectedCountry) return;
         if (this.addrEl) this.addrEl.value = suggestion.label;
         this.setState({
           address: suggestion.label,
@@ -1785,18 +1836,20 @@
 
       loadSuggestions(value) {
         const query = (value || '').trim(), t = this.T()[this.state.lang];
+        const country = this.state.selectedCountry;
+        const generation = this._acGeneration = (this._acGeneration || 0) + 1;
         clearTimeout(this._ac);
-        if (query.length < 3) {
+        if (!country || query.length < 3) {
           this.setState({ suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
           return;
         }
         this.setState({ suggestions: [], suggestionMessage: t.suggestLoading, suggestionIndex: -1 });
         this._ac = setTimeout(() => {
           const requestValue = query;
-          fetch('/api/address-suggestions?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(this.state.lang))
+          fetch('/api/address-suggestions?q=' + encodeURIComponent(query) + '&lang=' + encodeURIComponent(this.state.lang) + '&country_code=' + encodeURIComponent(country))
             .then(res => res.json().catch(() => ({})).then(j => ({ ok: res.ok, status: res.status, j })))
             .then(({ ok, status, j }) => {
-              if (!this.addrEl || this.addrEl.value.trim() !== requestValue) return;
+              if (generation !== this._acGeneration || !this.addrEl || this.addrEl.value.trim() !== requestValue) return;
               const rateLimited = status === 429 && j && j.error && j.error.code === 'rate_limited';
               const suggestions = ok && Array.isArray(j.suggestions) ? j.suggestions : [];
               this.setState({
@@ -1806,7 +1859,7 @@
               });
             })
             .catch(() => {
-              if (this.addrEl && this.addrEl.value.trim() === requestValue) {
+              if (generation === this._acGeneration && this.addrEl && this.addrEl.value.trim() === requestValue) {
                 this.setState({ suggestions: [], suggestionMessage: t.suggestError, suggestionIndex: -1 });
               }
             });
@@ -1840,6 +1893,7 @@
       doSearch(addr, radius, options) {
         addr = (addr || '').trim();
         const t = this.T()[this.state.lang];
+        if (!this.state.selectedCountry) { this.setState({ formError: t.selectCountryFirst }); return; }
         if (!addr) { this.setState({ formError: t.formErrAddr }); return; }
         const r = radius || this.state.radius;
         const opts = options || {}, preserve = !!opts.preserve;
@@ -1850,14 +1904,13 @@
         clearTimeout(this._st);
 
         // Gövde: "enlem, boylam" biçimi koordinat olarak, aksi halde adres olarak gönderilir.
-        const body = { radius: r, lang: this.state.lang, topn: 20 };
+        const body = { radius: r, lang: this.state.lang, topn: 20, country_code: this.state.selectedCountry };
         const cm = addr.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*,\s*(-?\d+(?:[.,]\d+)?)\s*$/);
         const selected = opts.coords || (this.state.selectedCoords && this.state.selectedCoords.label === addr ? this.state.selectedCoords : null);
         if (selected) {
           body.address = addr;
           body.lat = selected.lat;
           body.lon = selected.lon;
-          body.country_code = selected.country_code || 'be';
         }
         else if (cm) { body.lat = parseFloat(cm[1].replace(',', '.')); body.lon = parseFloat(cm[2].replace(',', '.')); }
         else { body.address = addr; }
@@ -1884,7 +1937,11 @@
               this.setState({ status: 'error', refreshing: false, errorKind: 'empty' });
               return;
             }
-            this.saveRecent(addr);
+            const recentEntry = { label: addr, country_code: body.country_code };
+            if (Number.isFinite(body.lat) && Number.isFinite(body.lon)) {
+              recentEntry.lat = body.lat; recentEntry.lon = body.lon;
+            }
+            this.saveRecent(recentEntry);
             if (this.map) { this.map.remove(); this.map = null; this.tiles = null; this.mk = {}; this.groups = {}; }
             this.setState({ status: 'results', refreshing: false, data: j, address: addr, recent: this.loadRecent() });
           })
@@ -1892,9 +1949,22 @@
       }
 
       setLang(lang) {
+        const translations = this.T();
+        const isCountrySelectionError = ['tr', 'en', 'nl'].some(code =>
+          translations[code] &&
+          this.state.formError === translations[code].selectCountryFirst
+        );
         this.savePreference('eca-lang', 'eca-lang-saved-at', lang);
         if (this.map) { this.map.remove(); this.map = null; this.tiles = null; this.mk = {}; this.groups = {}; }
-        this.setState({ lang, suggestions: [], suggestionMessage: '', suggestionIndex: -1 });
+        this.setState({
+          lang,
+          suggestions: [],
+          suggestionMessage: '',
+          suggestionIndex: -1,
+          formError: isCountrySelectionError && translations[lang]
+            ? translations[lang].selectCountryFirst
+            : this.state.formError
+        });
       }
 
       transitSourceRows(t, countryCode) {
@@ -1942,13 +2012,30 @@
           });
       }
 
+      detectVisitorCountry() {
+        if (this.state.selectedCountry) return Promise.resolve();
+        const generation = this._countryChoiceGeneration || 0;
+        return fetch('/api/visitor-country', { cache: 'no-store' })
+          .then(response => response.ok ? response.json() : null)
+          .then(hint => {
+            if (this._visitorCountryCancelled || generation !== (this._countryChoiceGeneration || 0)
+                || this.state.selectedCountry) return;
+            if (hint && ['be', 'nl'].includes(hint.country_code)) {
+              this.setState({ selectedCountry: hint.country_code });
+            }
+          })
+          .catch(() => {});
+      }
+
       componentDidMount() {
+        this.detectVisitorCountry();
         window.addEventListener('resize', this.onResize);
         document.addEventListener('pointerdown', this.onDocumentPointerDown);
         document.addEventListener('keydown', this.onDocumentKeyDown);
         this.syncMap();
       }
       componentWillUnmount() {
+        this._visitorCountryCancelled = true;
         window.removeEventListener('resize', this.onResize);
         document.removeEventListener('pointerdown', this.onDocumentPointerDown);
         document.removeEventListener('keydown', this.onDocumentKeyDown);
@@ -2113,7 +2200,8 @@
           }
         }));
 
-        const recent = (S.recent || []).map(a => ({ label: a, pick: () => this.doSearch(a) }));
+        const recent = (S.recent || []).filter(entry => this.recentLabel(entry))
+          .map(entry => ({ label: this.recentLabel(entry), pick: () => this.openRecent(entry) }));
 
         const mapBoxStyle = Object.assign(
           { flex: '3 1 480px', width: stacked ? '100%' : 'auto', minWidth: 0, position: 'relative', background: 'var(--chip)' },
@@ -2311,16 +2399,39 @@
           themeLabel: dark ? t.themeLight : t.themeDark,
           themeActionLabel: dark ? t.themeToLight : t.themeToDark,
           toggleTheme: () => { const th = dark ? 'light' : 'dark'; this.savePreference('eca-theme', 'eca-theme-saved-at', th); this.setState({ theme: th }); },
-          addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; }, coordCountryRef: el => { this.coordCountryEl = el; },
+          selectedCountry: S.selectedCountry || '',
+          countryInvalid: !S.selectedCountry,
+          countrySelectStyle: {
+            width: '100%',
+            padding: '11px 13px',
+            marginBottom: '14px',
+            borderRadius: '10px',
+            border: S.selectedCountry ? '1px solid var(--line)' : '1px solid #FDA29B',
+            background: S.selectedCountry ? 'var(--bg)' : '#FEF3F2',
+            color: S.selectedCountry ? 'var(--ink)' : '#B42318',
+            font: '600 13px Manrope',
+            minHeight: '44px',
+            boxSizing: 'border-box',
+            outlineColor: S.selectedCountry ? '#2E6FDB' : '#D92D20'
+          },
+          showFormError: !!S.formError && S.formError !== t.selectCountryFirst,
+          addressPlaceholder: t.placeholder,
+          onCountryChange: e => this.setCountry(e.target.value),
+          onCountryRequired: () => {
+            if (!S.selectedCountry) {
+              this.setState({ formError: t.selectCountryFirst });
+            }
+          },
+          addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; },
           onAddrInput: e => this.handleAddressInput(e),
           onAddrKey: e => this.handleAddressKey(e),
           onSearch: () => this.doSearch(this.addrEl && this.addrEl.value),
           onCoordSearch: () => {
+            if (!S.selectedCountry) { this.setState({ formError: t.selectCountryFirst }); return; }
             const la = parseFloat(this.latEl && this.latEl.value), lo = parseFloat(this.lonEl && this.lonEl.value);
             if (isNaN(la) || isNaN(lo)) { this.setState({ formError: t.formErrCoord }); return; }
-            const countryCode = this.coordCountryEl && this.coordCountryEl.value === 'nl' ? 'nl' : 'be';
             this.doSearch(la.toFixed(5) + ', ' + lo.toFixed(5), undefined, {
-              coords: { lat: la, lon: lo, country_code: countryCode }
+              coords: { lat: la, lon: lo }
             });
           },
           radiusOpts, resultRadiusOpts, recent, hasRecent: recent.length > 0,

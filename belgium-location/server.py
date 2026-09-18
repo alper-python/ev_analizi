@@ -72,7 +72,7 @@ AUTOCOMPLETE_UNAVAILABLE = {
 class AddressSuggestionProvider:
     """Small provider boundary so autocomplete can be replaced or tested independently."""
 
-    def suggest(self, query, lang, limit=6):
+    def suggest(self, query, lang, country_code, limit=6):
         raise NotImplementedError
 
 
@@ -83,13 +83,13 @@ class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
         self.api_key = api_key
         self.http_get = http_get
 
-    def suggest(self, query, lang, limit=6):
+    def suggest(self, query, lang, country_code, limit=6):
         response = self.http_get(
             self.ENDPOINT,
             params={
                 "text": query,
                 "apiKey": self.api_key,
-                "filter": "countrycode:be,nl",
+                "filter": f"countrycode:{country_code}",
                 "lang": lang,
                 "limit": min(int(limit), 6),
                 "format": "json",
@@ -121,8 +121,8 @@ class GeoapifyAddressSuggestionProvider(AddressSuggestionProvider):
                 continue
             if not label:
                 continue
-            country_code = str(item.get("country_code") or "").strip().lower()
-            if country_code not in COUNTRY_DATASETS:
+            result_country = str(item.get("country_code") or "").strip().lower()
+            if result_country != country_code:
                 continue
 
             suggestions.append({
@@ -730,6 +730,21 @@ def health():
                     "components": public_components}), 503
 
 
+@app.get("/api/visitor-country")
+def visitor_country_api():
+    """Header-only UI default hint; never a security or dataset-selection rule."""
+    country_code = None
+    for header in ("CF-IPCountry", "X-Vercel-IP-Country",
+                   "CloudFront-Viewer-Country", "X-Country-Code"):
+        value = request.headers.get(header, "").strip().lower()
+        if value:
+            country_code = value if value in ("be", "nl") else None
+            break
+    response = jsonify({"country_code": country_code})
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 @app.get("/api/data-sources")
 def data_sources_api():
     country_code = str(request.args.get("country_code", "be")).strip().lower()
@@ -745,6 +760,9 @@ def data_sources_api():
 @limiter.limit("60 per minute")
 def address_suggestions_api():
     try:
+        country_code = request.args.get("country_code", "").strip().lower()
+        if country_code not in ("be", "nl"):
+            return _json_error("invalid_request", "Unsupported country.", 400)
         lang = str(request.args.get("lang", "en")).lower()
         if lang not in SUPPORTED_LANGS:
             return _json_error("invalid_request", "Unsupported language.", 400)
@@ -756,7 +774,7 @@ def address_suggestions_api():
             return jsonify({"available": False, "suggestions": [],
                             "message": AUTOCOMPLETE_UNAVAILABLE[lang]})
         try:
-            suggestions = provider.suggest(query, lang, limit=6)
+            suggestions = provider.suggest(query, lang, country_code, limit=6)
         except (requests.RequestException, ValueError) as exc:
             LOGGER.warning("Address autocomplete upstream failure (%s)",
                            type(exc).__name__)
@@ -790,12 +808,11 @@ def _analyze_api_response():
     if not isinstance(body, dict):
         return _json_error("invalid_request", "A JSON object is required.", 400)
 
-    country_code_explicit = "country_code" in body and body["country_code"] is not None
-    country_code = body.get("country_code", "be")
+    country_code = body.get("country_code")
     if not isinstance(country_code, str):
         return _json_error("invalid_request", "Unsupported country.", 400)
     country_code = country_code.strip().lower()
-    if country_code not in COUNTRY_DATASETS:
+    if country_code not in ("be", "nl"):
         return _json_error("invalid_request", "Unsupported country.", 400)
 
     lang_value = body.get("lang", "en")
@@ -847,16 +864,10 @@ def _analyze_api_response():
             lat, lon, display_address = DEMO_LAT, DEMO_LON, f"{address} — DEMO"
         else:
             try:
-                lat, lon, display_address, geocoded_country = geocode_with_country(address)
+                lat, lon, display_address, _ = geocode_with_country(address, country_code)
             except RuntimeError:
                 return _json_error(
                     "address_not_found", "Address could not be geocoded.", 400)
-
-            if not country_code_explicit:
-                if geocoded_country not in COUNTRY_DATASETS:
-                    return _json_error(
-                        "invalid_request", "Unsupported country.", 400)
-                country_code = geocoded_country
 
     readiness = _runtime_readiness(country_code=country_code)
     if not readiness["ready"]:

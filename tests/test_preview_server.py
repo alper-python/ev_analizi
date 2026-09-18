@@ -3,9 +3,12 @@ import json
 import math
 import re
 import sys
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import pandas as pd
 from geographiclib.geodesic import Geodesic
@@ -28,8 +31,8 @@ class FakeProvider(server.AddressSuggestionProvider):
         self.suggestions = suggestions or []
         self.calls = []
 
-    def suggest(self, query, lang, limit=6):
-        self.calls.append((query, lang, limit))
+    def suggest(self, query, lang, country_code, limit=6):
+        self.calls.append((query, lang, country_code, limit))
         return self.suggestions[:limit]
 
 
@@ -44,28 +47,82 @@ class FakeResponse:
         return self.payload
 
 
+class VisitorCountryApiTests(unittest.TestCase):
+    def setUp(self):
+        self.client = server.app.test_client()
+
+    def test_cloudflare_supported_countries_and_case_normalization(self):
+        for value, expected in [('BE', 'be'), ('NL', 'nl'), ('be', 'be'), (' nL ', 'nl')]:
+            with self.subTest(value=value):
+                response = self.client.get('/api/visitor-country', headers={'CF-IPCountry': value})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json(), {'country_code': expected})
+
+    def test_missing_or_unsupported_country_is_null(self):
+        for headers in ({}, {'CF-IPCountry': 'US'}, {'CF-IPCountry': 'XX'}):
+            with self.subTest(headers=headers):
+                self.assertEqual(self.client.get('/api/visitor-country', headers=headers).get_json(),
+                                 {'country_code': None})
+
+    def test_alternative_headers_and_precedence(self):
+        for header in ('X-Vercel-IP-Country', 'CloudFront-Viewer-Country', 'X-Country-Code'):
+            self.assertEqual(self.client.get('/api/visitor-country', headers={header: 'NL'}).get_json(),
+                             {'country_code': 'nl'})
+        self.assertEqual(self.client.get('/api/visitor-country', headers={
+            'CF-IPCountry': 'US', 'X-Country-Code': 'BE'}).get_json(), {'country_code': None})
+
+    def test_country_response_is_private_and_not_cached(self):
+        response = self.client.get('/api/visitor-country', headers={'CF-IPCountry': 'BE'})
+        self.assertEqual(response.headers['Cache-Control'], 'private, no-store')
+
+
 class AddressSuggestionsApiTests(unittest.TestCase):
     def setUp(self):
         server.limiter.reset()
         self.client = server.app.test_client()
 
+    def test_country_is_required_and_invalid_country_rejected(self):
+        provider = FakeProvider()
+        with patch.object(server, "ADDRESS_PROVIDER", provider):
+            for suffix in ('', '&country_code=de', '&country_code='):
+                response = self.client.get('/api/address-suggestions?q=Town' + suffix)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()['error']['code'], 'invalid_request')
+        self.assertEqual(provider.calls, [])
+
+    def test_selected_country_alone_is_sent_to_geoapify_and_filters_results(self):
+        for country in ('be', 'nl'):
+            with self.subTest(country=country):
+                calls = []
+                def fake_get(url, params, timeout):
+                    calls.append(params)
+                    return FakeResponse({'results': [
+                        {'formatted': code, 'lat': 52, 'lon': 5, 'country_code': code}
+                        for code in ('be', 'nl')]})
+                provider = server.GeoapifyAddressSuggestionProvider('test-key', http_get=fake_get)
+                with patch.object(server, 'ADDRESS_PROVIDER', provider):
+                    response = self.client.get('/api/address-suggestions?q=Town&country_code=' + country)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(calls[0]['filter'], 'countrycode:' + country)
+                self.assertEqual([s['country_code'] for s in response.get_json()['suggestions']], [country])
+
     def test_short_query_returns_no_suggestions_without_calling_provider(self):
         provider = FakeProvider([{"label": "Unused", "lat": 1, "lon": 2,
                                   "result_type": "street"}])
         with patch.object(server, "ADDRESS_PROVIDER", provider):
-            response = self.client.get("/api/address-suggestions?q=ab&lang=en")
+            response = self.client.get("/api/address-suggestions?q=ab&lang=en&country_code=be")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["suggestions"], [])
         self.assertEqual(provider.calls, [])
 
     def test_unsupported_language_is_rejected(self):
-        response = self.client.get("/api/address-suggestions?q=Leuven&lang=fr")
+        response = self.client.get("/api/address-suggestions?q=Leuven&lang=fr&country_code=be")
         self.assertEqual(response.status_code, 400)
 
     def test_missing_api_key_is_reported_without_breaking_preview(self):
         with (patch.object(server, "ADDRESS_PROVIDER", None),
               patch.dict(server.os.environ, {}, clear=True)):
-            response = self.client.get("/api/address-suggestions?q=Leuven&lang=nl")
+            response = self.client.get("/api/address-suggestions?q=Leuven&lang=nl&country_code=be")
         payload = response.get_json()
         self.assertEqual(response.status_code, 200)
         self.assertFalse(payload["available"])
@@ -85,7 +142,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             ]})
 
         provider = server.GeoapifyAddressSuggestionProvider("server-secret", http_get=fake_get)
-        suggestions = provider.suggest("Bondgenotenlaan", "en", limit=6)
+        suggestions = provider.suggest("Bondgenotenlaan", "en", "be", limit=6)
 
         self.assertEqual(suggestions, [{
             "label": "Bondgenotenlaan 1, Leuven, België",
@@ -94,7 +151,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             "country_code": "be",
             "result_type": "amenity",
         }])
-        self.assertEqual(calls[0][1]["filter"], "countrycode:be,nl")
+        self.assertEqual(calls[0][1]["filter"], "countrycode:be")
         self.assertEqual(calls[0][1]["lang"], "en")
         self.assertEqual(calls[0][1]["limit"], 6)
         self.assertEqual(calls[0][1]["format"], "json")
@@ -112,7 +169,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
             ]}))
         with patch.object(server, "ADDRESS_PROVIDER", provider):
             response = self.client.get(
-                "/api/address-suggestions?q=Gijmelstraat%2056&lang=tr")
+                "/api/address-suggestions?q=Gijmelstraat%2056&lang=tr&country_code=be")
         payload = response.get_json()
         self.assertTrue(payload["available"])
         self.assertEqual(len(payload["suggestions"]), 2)
@@ -126,7 +183,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         provider = server.GeoapifyAddressSuggestionProvider(
             "test-key", http_get=lambda *_args, **_kwargs: FakeResponse({"results": []}))
         with patch.object(server, "ADDRESS_PROVIDER", provider):
-            response = self.client.get("/api/address-suggestions?q=NoMatch&lang=en")
+            response = self.client.get("/api/address-suggestions?q=NoMatch&lang=en&country_code=be")
         self.assertEqual(response.get_json(), {"available": True, "suggestions": []})
 
     def test_malformed_result_entries_are_skipped_without_crashing(self):
@@ -136,7 +193,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
                 {"formatted": "Valid", "lat": 50.1, "lon": 4.1, "country_code": "be"},
             ]}))
         with patch.object(server, "ADDRESS_PROVIDER", provider):
-            response = self.client.get("/api/address-suggestions?q=Valid&lang=nl")
+            response = self.client.get("/api/address-suggestions?q=Valid&lang=nl&country_code=be")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["suggestions"], [{
             "label": "Valid", "lat": 50.1, "lon": 4.1,
@@ -150,7 +207,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
                     "formatted": "Leuven, Belgium", "lat": 50.88,
                     "lon": 4.70, "country_code": "be", "result_type": "city"}},
             ]}))
-        self.assertEqual(provider.suggest("Leuven", "en"), [{
+        self.assertEqual(provider.suggest("Leuven", "en", "be"), [{
             "label": "Leuven, Belgium", "lat": 50.88, "lon": 4.70,
             "country_code": "be", "result_type": "city",
         }])
@@ -163,7 +220,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
                          clear=True),
               patch.object(server, "GeoapifyAddressSuggestionProvider",
                            return_value=provider) as provider_class):
-            response = self.client.get("/api/address-suggestions?q=Gijmelstraat&lang=tr")
+            response = self.client.get("/api/address-suggestions?q=Gijmelstraat&lang=tr&country_code=be")
         self.assertTrue(response.get_json()["available"])
         provider_class.assert_called_once_with("late-key")
 
@@ -176,7 +233,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         provider = server.GeoapifyAddressSuggestionProvider(secret, http_get=failing_get)
         with (patch.object(server, "ADDRESS_PROVIDER", provider),
               self.assertLogs(server.LOGGER, level="WARNING") as logs):
-            response = self.client.get("/api/address-suggestions?q=Gijmelstraat&lang=en")
+            response = self.client.get("/api/address-suggestions?q=Gijmelstraat&lang=en&country_code=be")
         payload = response.get_json()
         self.assertFalse(payload["available"])
         self.assertEqual(payload["suggestions"], [])
@@ -190,7 +247,7 @@ class AddressSuggestionsApiTests(unittest.TestCase):
         with (patch.object(server, "ADDRESS_PROVIDER", provider),
               self.assertLogs(server.LOGGER, level="ERROR")):
             response = self.client.get(
-                "/api/address-suggestions?q=Gijmelstraat&lang=en")
+                "/api/address-suggestions?q=Gijmelstraat&lang=en&country_code=be")
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.content_type, "application/json")
@@ -344,6 +401,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
     def valid_payload(self, **updates):
         payload = {
             "address": "Selected Belgian address",
+            "country_code": "be",
             "lat": 51.0034977,
             "lon": 4.8405107,
             "radius": 2500,
@@ -360,7 +418,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
                 self.assert_json_error(response)
 
     def test_object_without_address_or_coordinates_is_rejected(self):
-        self.assert_json_error(self.client.post("/api/analyze", json={}))
+        self.assert_json_error(self.client.post("/api/analyze", json={"country_code": "be"}))
 
     def test_malformed_json_returns_controlled_error(self):
         self.assert_json_error(self.post_raw('{"lat":'))
@@ -412,16 +470,16 @@ class AnalyzeValidationApiTests(unittest.TestCase):
         ):
             with self.subTest(payload=payload):
                 self.assert_json_error(
-                    self.client.post("/api/analyze", json=payload))
+                    self.client.post("/api/analyze", json={**payload, "country_code": "be"}))
 
     def test_address_must_be_a_non_blank_bounded_string(self):
         for address in ({"street": "Gijmelstraat"}, ["Gijmelstraat"], "", "   "):
             with self.subTest(address=address):
                 response = self.client.post(
-                    "/api/analyze", json={"address": address})
+                    "/api/analyze", json={"address": address, "country_code": "be"})
                 self.assert_json_error(response)
         response = self.client.post(
-            "/api/analyze", json={"address": "x" * (server.MAX_ADDRESS_LENGTH + 1)})
+            "/api/analyze", json={"address": "x" * (server.MAX_ADDRESS_LENGTH + 1), "country_code": "be"})
         self.assert_json_error(response)
 
     def test_address_at_max_length_and_coordinates_is_accepted(self):
@@ -440,20 +498,19 @@ class AnalyzeValidationApiTests(unittest.TestCase):
               patch.object(server, "_run_preview_analysis",
                            return_value=result) as analysis):
             response = self.client.post(
-                "/api/analyze", json={"address": "  Leuven  "})
+                "/api/analyze", json={"address": "  Leuven  ", "country_code": "be"})
         self.assertEqual(response.status_code, 200)
         analysis.assert_called_once_with(
             50.8795, 4.7023, "Leuven, Belgium",
             server.DEFAULT_RADIUS_M, server.TOP_N, "en", country_code="be")
 
-    def test_missing_country_and_language_default_to_belgium_and_english(self):
+    def test_missing_country_is_rejected_before_analysis(self):
         with patch.object(server, "_run_preview_analysis", return_value={}) as analysis:
             response = self.client.post("/api/analyze", json={
                 "lat": 50.88, "lon": 4.70,
             })
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(analysis.call_args.args[-1], "en")
-        self.assertEqual(analysis.call_args.kwargs, {"country_code": "be"})
+        self.assert_json_error(response)
+        analysis.assert_not_called()
 
     def test_explicit_belgium_and_language_are_preserved(self):
         with patch.object(server, "_run_preview_analysis", return_value={}) as analysis:
@@ -463,6 +520,27 @@ class AnalyzeValidationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(analysis.call_args.args[-1], "tr")
         self.assertEqual(analysis.call_args.kwargs, {"country_code": "be"})
+
+    def test_manual_geocode_receives_selected_country_without_inference(self):
+        for country in ('be', 'nl'):
+            with self.subTest(country=country), \
+                 patch.object(server, 'DATA_MODE', 'real'), \
+                 patch.object(server, 'geocode_with_country', return_value=(52, 5, 'Town', '')) as geocode, \
+                 patch.object(server, '_run_preview_analysis', return_value={}) as analysis:
+                response = self.client.post('/api/analyze', json={'address': 'Town', 'country_code': country})
+                self.assertEqual(response.status_code, 200)
+                geocode.assert_called_once_with('Town', country)
+                self.assertEqual(analysis.call_args.kwargs['country_code'], country)
+                self.assertEqual(analysis.call_args.args[-1], 'en')
+
+    def test_manual_geocoder_provider_uses_only_selected_country(self):
+        location = SimpleNamespace(latitude=52, longitude=5, address='Town', raw={})
+        for country in ('be', 'nl'):
+            with self.subTest(country=country), patch.object(app, 'Nominatim'), \
+                 patch.object(app, 'RateLimiter') as limiter:
+                limiter.return_value.return_value = location
+                self.assertEqual(app.geocode_with_country('Town', country)[:3], (52, 5, 'Town'))
+                limiter.return_value.assert_called_once_with('Town', addressdetails=True, country_codes=country)
 
     def test_country_code_is_normalized(self):
         with patch.object(server, "_run_preview_analysis", return_value={}) as analysis:
@@ -488,7 +566,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
               patch.object(server, "geocode_with_country",
                            side_effect=RuntimeError("not found"))):
             response = self.client.post(
-                "/api/analyze", json={"address": "Missing Belgian address"})
+                "/api/analyze", json={"address": "Missing Belgian address", "country_code": "be"})
         payload = self.assert_json_error(
             response, status=400, code="address_not_found")
         self.assertEqual(payload["error"]["message"],
@@ -501,7 +579,7 @@ class AnalyzeValidationApiTests(unittest.TestCase):
                            side_effect=ValueError(private_detail)),
               self.assertLogs(server.LOGGER, level="ERROR")):
             response = self.client.post(
-                "/api/analyze", json={"address": "Leuven"})
+                "/api/analyze", json={"address": "Leuven", "country_code": "be"})
         self.assert_json_error(response, status=500, code="internal_error")
         self.assertNotIn(private_detail, response.get_data(as_text=True))
 
@@ -644,7 +722,7 @@ class ResultStateFrontendContentTests(unittest.TestCase):
         self.assertIn("errorKind: 'empty'", self.success_handler)
 
     def test_normal_nonzero_display_result_path_is_preserved(self):
-        self.assertIn("this.saveRecent(addr)", self.success_handler)
+        self.assertIn("this.saveRecent(recentEntry)", self.success_handler)
         self.assertIn("data: j", self.success_handler)
         self.assertIn("recent: this.loadRecent()", self.success_handler)
 
@@ -660,7 +738,7 @@ class AccessibilityBaselineContentTests(unittest.TestCase):
         end = self.frontend.index('>', start)
         address_input = self.frontend[start:end]
         self.assertIn('aria-label="{{ t.addressLabel }}"', address_input)
-        self.assertIn('placeholder="{{ t.placeholder }}"', address_input)
+        self.assertIn('placeholder="{{ addressPlaceholder }}"', address_input)
 
     def test_coordinate_inputs_have_localized_programmatic_names(self):
         for ref_name, label_name in (
@@ -673,19 +751,73 @@ class AccessibilityBaselineContentTests(unittest.TestCase):
             self.assertIn(
                 f'aria-label="{{{{ t.{label_name} }}}}"', input_markup)
 
-    def test_coordinate_search_has_country_selector_and_sends_country_code(self):
+    def test_shared_search_country_selector_and_payload(self):
         for source in (
-            '<select ref="{{ coordCountryRef }}" aria-label="{{ t.coordinateCountryLabel }}"',
+            '<select value="{{ selectedCountry }}" onChange="{{ onCountryChange }}"',
+            'aria-label="{{ t.coordinateCountryLabel }}"',
+            'aria-invalid="{{ countryInvalid }}"',
+            'style="{{ countrySelectStyle }}"',
             '<option value="be">{{ t.belgium }}</option>',
             '<option value="nl">{{ t.netherlands }}</option>',
             "coordinateCountryLabel: 'Country'",
             "coordinateCountryLabel: 'Ülke'",
             "coordinateCountryLabel: 'Land'",
-            "coordCountryRef: el => { this.coordCountryEl = el; }",
-            "const countryCode = this.coordCountryEl && this.coordCountryEl.value === 'nl' ? 'nl' : 'be';",
-            "coords: { lat: la, lon: lo, country_code: countryCode }",
+            "country_code: this.state.selectedCountry",
+            "coords: { lat: la, lon: lo }",
+            "'&country_code=' + encodeURIComponent(country)",
         ):
             self.assertIn(source, self.frontend)
+
+        self.assertNotIn('coordCountryRef', self.frontend)
+        self.assertEqual(self.frontend.count('<option value="be">'), 1)
+        self.assertLess(
+            self.frontend.index('<select value="{{ selectedCountry }}"'),
+            self.frontend.index('<input ref="{{ addrRef }}"'),
+        )
+
+    def test_unselected_country_shows_validation_without_disabling_controls(self):
+        self.assertNotIn('disabled="{{ searchDisabled }}"', self.frontend)
+        self.assertNotIn("searchDisabled: !S.selectedCountry", self.frontend)
+
+        self.assertIn("countryInvalid: !S.selectedCountry", self.frontend)
+        self.assertIn("countrySelectStyle:", self.frontend)
+        self.assertIn(
+            "border: S.selectedCountry ? '1px solid var(--line)' : '1px solid #FDA29B'",
+            self.frontend,
+        )
+        self.assertIn(
+            "background: S.selectedCountry ? 'var(--bg)' : '#FEF3F2'",
+            self.frontend,
+        )
+
+        self.assertIn('onFocus="{{ onCountryRequired }}"', self.frontend)
+        self.assertIn(
+            "if (!this.state.selectedCountry) { this.setState({ formError: t.selectCountryFirst }); return; }",
+            self.frontend,
+        )
+        self.assertIn(
+            "if (!S.selectedCountry) { this.setState({ formError: t.selectCountryFirst }); return; }",
+            self.frontend,
+        )
+
+        for text in (
+            'Önce bir ülke seçin',
+            'Select a country first',
+            'Selecteer eerst een land',
+        ):
+            self.assertIn(text, self.frontend)
+
+    def test_country_restore_save_and_change_invalidation(self):
+        self.assertIn("localStorage.getItem('eca-country')", self.frontend)
+        self.assertIn("if (['be', 'nl'].includes(storedCountry)) selectedCountry = storedCountry", self.frontend)
+        self.assertIn("localStorage.setItem('eca-country', selectedCountry)", self.frontend)
+        method = self.frontend.split('setCountry(value, afterChange) {', 1)[1].split('selectSuggestion(suggestion)', 1)[0]
+        self.assertIn('selectedCoords: null', method)
+        self.assertIn('suggestions: []', method)
+        self.assertIn('clearTimeout(this._ac)', method)
+        self.assertNotIn('doSearch(', method)
+        self.assertNotIn('address:', method)
+        self.assertIn('generation !== this._acGeneration', self.frontend)
 
     def test_icon_only_theme_button_has_action_based_accessible_name(self):
         self.assertEqual(
@@ -712,7 +844,15 @@ class AccessibilityBaselineContentTests(unittest.TestCase):
 
     def test_language_and_theme_state_continue_to_drive_names(self):
         self.assertIn("const t = this.T()[S.lang]", self.frontend)
-        self.assertIn("this.setState({ lang, suggestions:", self.frontend)
+        self.assertIn("setLang(lang)", self.frontend)
+        self.assertIn(
+            "const isCountrySelectionError = ['tr', 'en', 'nl'].some",
+            self.frontend,
+        )
+        self.assertIn(
+            "translations[lang].selectCountryFirst",
+            self.frontend,
+        )
         self.assertIn("const th = dark ? 'light' : 'dark'", self.frontend)
         self.assertIn("this.setState({ theme: th })", self.frontend)
 
@@ -724,23 +864,189 @@ class AccessibilityBaselineContentTests(unittest.TestCase):
         self.assertNotIn('tabindex="1"', self.frontend.lower())
 
 
+@unittest.skipUnless(shutil.which('node'), 'Node required for frontend runtime checks')
+class RecentSearchRuntimeTests(unittest.TestCase):
+    def run_recent_script(self, assertions, legacy='[]'):
+        frontend = (SOURCE_DIR / 'static/index.html').read_text(encoding='utf-8')
+        component = frontend[frontend.index('class Component extends DCLogic'):frontend.rindex('</script>', 0, frontend.index('<!-- Cloudflare Web Analytics -->'))]
+        harness = """
+const assert = require('node:assert/strict');
+const storage = new Map([['eca-recent', LEGACY]]);
+global.localStorage = {getItem: k => storage.get(k) ?? null,
+  setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k)};
+global.window = {innerWidth: 1440};
+const callbacks = [];
+class DCLogic { setState(patch, cb) { Object.assign(this.state, patch); if(cb) callbacks.push(cb); } }
+const requests = [];
+global.fetch = (url, options) => { requests.push({url, body: JSON.parse(options.body)}); return new Promise(() => {}); };
+""".replace('LEGACY', json.dumps(legacy))
+        result = subprocess.run([shutil.which('node'), '-'], input=harness + component +
+                                '\nconst c = new Component({});\n' + assertions,
+                                text=True, encoding='utf-8', capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_nl_coordinate_recent_restores_country_before_request(self):
+        self.run_recent_script("""
+c.state.selectedCountry = 'be';
+c.openRecent({label:'52.1, 5.2',country_code:'nl',lat:52.1,lon:5.2});
+assert.equal(requests.length,0); callbacks.shift()();
+assert.equal(c.state.selectedCountry,'nl');
+assert.equal(requests[0].body.country_code,'nl');
+assert.equal(requests[0].body.lat,52.1); assert.equal(requests[0].body.lon,5.2);
+""")
+
+    def test_be_coordinate_recent_restores_country_before_request(self):
+        self.run_recent_script("""
+c.state.selectedCountry = 'nl';
+c.openRecent({label:'Coordinates',country_code:'be',lat:50.1,lon:4.2});
+callbacks.shift()(); assert.equal(requests[0].body.country_code,'be');
+assert.equal(requests[0].body.lat,50.1); assert.equal(requests[0].body.lon,4.2);
+""")
+
+    def test_address_recent_restores_country(self):
+        self.run_recent_script("""
+c.state.selectedCountry = 'be'; c.openRecent({label:'Amsterdam',country_code:'nl'});
+callbacks.shift()(); assert.equal(requests[0].body.country_code,'nl');
+assert.equal(requests[0].body.address,'Amsterdam'); assert.equal(requests[0].body.lat,undefined);
+""")
+
+    def test_legacy_strings_restore_without_crashing_or_deletion(self):
+        self.run_recent_script("""
+assert.deepEqual(c.loadRecent(),['Old address']);
+assert.equal(c.recentLabel(c.loadRecent()[0]),'Old address');
+assert.equal(storage.get('eca-recent'),'["Old address"]');
+""", legacy='["Old address"]')
+
+    def test_old_string_requires_country_when_unselected(self):
+        self.run_recent_script("""
+c.openRecent('Old address'); assert.equal(requests.length,0);
+assert.equal(c.state.selectedCountry,null); assert.equal(c.state.formError,'Select a country first');
+""")
+
+    def test_old_string_uses_current_country(self):
+        self.run_recent_script("""
+c.state.selectedCountry = 'nl'; c.openRecent('Old address');
+assert.equal(requests[0].body.country_code,'nl'); assert.equal(requests[0].body.address,'Old address');
+""")
+
+    def test_deduplication_preserves_country_and_legacy_entries(self):
+        self.run_recent_script("""
+c._recent = ['Legacy']; c.saveRecent({label:'Same',country_code:'be'});
+c.saveRecent({label:'Same',country_code:'nl'}); c.saveRecent({label:'Same',country_code:'be',lat:50,lon:4});
+assert.equal(c.loadRecent().length,3); assert.equal(c.loadRecent()[0].lat,50);
+assert.equal(c.loadRecent()[1].country_code,'nl'); assert.equal(c.loadRecent()[2],'Legacy');
+""")
+
+    def test_saved_country_wins_without_requesting_visitor_hint(self):
+        self.run_recent_script("""
+storage.set('eca-country','nl'); const saved = new Component({});
+let called = false; global.fetch = () => { called = true; throw Error('unexpected'); };
+saved.detectVisitorCountry().then(() => {
+  assert.equal(saved.state.selectedCountry,'nl'); assert.equal(called,false);
+});
+""")
+
+    def test_visitor_hint_selects_be_or_nl_without_persisting(self):
+        self.run_recent_script("""
+(async () => {
+  for (const country of ['be','nl']) {
+    const fresh = new Component({});
+    global.fetch = (url,options) => {
+      assert.equal(url,'/api/visitor-country'); assert.equal(options.cache,'no-store');
+      return Promise.resolve({ok:true,json:() => Promise.resolve({country_code:country})});
+    };
+    await fresh.detectVisitorCountry(); assert.equal(fresh.state.selectedCountry,country);
+    assert.equal(storage.has('eca-country'),false);
+  }
+})();
+""")
+
+    def test_null_invalid_and_failed_visitor_hints_leave_country_unselected(self):
+        self.run_recent_script("""
+(async () => {
+  for (const hint of [null,'de']) {
+    const fresh = new Component({});
+    global.fetch = () => Promise.resolve({ok:true,json:() => Promise.resolve({country_code:hint})});
+    await fresh.detectVisitorCountry(); assert.equal(fresh.state.selectedCountry,null);
+  }
+  global.fetch = () => Promise.reject(Error('offline'));
+  await c.detectVisitorCountry(); assert.equal(c.state.selectedCountry,null);
+  global.fetch = () => Promise.resolve({ok:false});
+  await c.detectVisitorCountry(); assert.equal(c.state.selectedCountry,null);
+})();
+""")
+
+    def test_late_visitor_hint_does_not_override_user_choice(self):
+        self.run_recent_script("""
+let resolve; global.fetch = () => new Promise(r => {resolve = r;});
+const pending = c.detectVisitorCountry(); c.setCountry('nl');
+resolve({ok:true,json:() => Promise.resolve({country_code:'be'})});
+pending.then(() => {assert.equal(c.state.selectedCountry,'nl'); assert.equal(storage.get('eca-country'),'nl');});
+""")
+
+    def test_manual_selection_then_unselect_still_blocks_late_hint(self):
+        self.run_recent_script("""
+let resolve; global.fetch = () => new Promise(r => {resolve = r;});
+const pending = c.detectVisitorCountry(); c.setCountry('nl'); c.setCountry('');
+resolve({ok:true,json:() => Promise.resolve({country_code:'be'})});
+pending.then(() => {assert.equal(c.state.selectedCountry,null);});
+""")
+
+
+    def test_invalid_saved_country_is_ignored_and_visitor_hint_applies(self):
+        self.run_recent_script("""
+storage.set('eca-country','de'); const fresh = new Component({});
+assert.equal(fresh.state.selectedCountry,null);
+global.fetch = () => Promise.resolve({ok:true,json:() => Promise.resolve({country_code:'be'})});
+fresh.detectVisitorCountry().then(() => {
+  assert.equal(fresh.state.selectedCountry,'be'); assert.equal(storage.get('eca-country'),'de');
+});
+""")
+
+    def test_country_change_preserves_text_and_rejects_stale_autocomplete(self):
+        self.run_recent_script("""
+(async () => {
+  c.state.selectedCountry = 'be'; c.state.address = 'Typed address'; c.addrEl = {value:'Typed address'};
+  c.state.selectedCoords = {label:'Typed address',lat:50,lon:4,country_code:'be'};
+  let timer, resolve, url;
+  global.setTimeout = callback => {timer = callback; return 1;}; global.clearTimeout = () => {};
+  global.fetch = u => {url = u; return new Promise(r => {resolve = r;});};
+  c.loadSuggestions('Typed address'); timer(); assert.ok(url.includes('country_code=be'));
+  c.setCountry('nl'); assert.equal(c.state.selectedCountry,'nl');
+  assert.equal(c.state.selectedCoords,null); assert.deepEqual(c.state.suggestions,[]);
+  assert.equal(c.state.address,'Typed address'); assert.equal(c.addrEl.value,'Typed address');
+  resolve({ok:true,status:200,json:() => Promise.resolve({suggestions:[{label:'Stale',country_code:'be'}]})});
+  for(let i=0;i<6;i++) await Promise.resolve();
+  assert.deepEqual(c.state.suggestions,[]); assert.equal(c.state.selectedCountry,'nl');
+})();
+""")
+
+    def test_address_recent_restores_both_countries(self):
+        self.run_recent_script("""
+for(const country of ['be','nl']) {
+  c.openRecent({label:'Town',country_code:country}); callbacks.shift()();
+  assert.equal(requests.at(-1).body.country_code,country);
+}
+""")
+
+
 class PrivacyStorageContentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.frontend = (SOURCE_DIR / "static" / "index.html").read_text(
             encoding="utf-8")
 
-    def test_recent_addresses_are_not_read_from_or_written_to_storage(self):
-        self.assertNotIn("localStorage.getItem('eca-recent')", self.frontend)
+    def test_recent_addresses_are_not_written_to_storage(self):
         self.assertNotIn("localStorage.setItem('eca-recent'", self.frontend)
         self.assertNotIn("sessionStorage", self.frontend)
         self.assertNotIn("document.cookie", self.frontend)
 
-    def test_legacy_recent_addresses_are_removed_best_effort(self):
+    def test_legacy_recent_addresses_are_read_without_deleting_history(self):
         self.assertIn(
-            "try { localStorage.removeItem('eca-recent'); } catch (e) {}",
+            "JSON.parse(localStorage.getItem('eca-recent') || '[]')",
             self.frontend,
         )
+        self.assertNotIn("localStorage.removeItem('eca-recent')", self.frontend)
 
     def test_theme_and_language_restore_only_with_30_day_timestamps(self):
         self.assertIn(
@@ -792,9 +1098,8 @@ class PrivacyStorageContentTests(unittest.TestCase):
         storage_lines = [line.strip() for line in self.frontend.splitlines()
                          if "localStorage." in line]
         self.assertTrue(storage_lines)
-        storage_region_start = self.frontend.index(
-            "try { localStorage.removeItem('eca-recent')")
-        storage_region_end = self.frontend.index("fmtDist(m)", storage_region_start)
+        storage_region_start = self.frontend.index("constructor(props)")
+        storage_region_end = self.frontend.index("selectSuggestion(suggestion)", storage_region_start)
         storage_region = self.frontend[storage_region_start:storage_region_end]
         for line in storage_lines:
             self.assertIn(line, storage_region)
@@ -804,7 +1109,7 @@ class PrivacyStorageContentTests(unittest.TestCase):
             "this._recent = []",
             "loadRecent() { return this._recent.slice(); }",
             "this._recent = recent.slice(0, 4)",
-            "this.saveRecent(addr)",
+            "this.saveRecent(recentEntry)",
             "recent: this.loadRecent()",
         ):
             self.assertIn(source, self.frontend)
@@ -814,7 +1119,7 @@ class PrivacyStorageContentTests(unittest.TestCase):
             r"localStorage\.(?:getItem|setItem|removeItem)\('([^']+)'",
             self.frontend,
         ))
-        self.assertEqual(storage_keys, {"eca-recent"})
+        self.assertEqual(storage_keys, {"eca-recent", "eca-country"})
         for forbidden in (
             "localStorage.setItem('address'",
             "localStorage.setItem('coordinates'",
@@ -1077,6 +1382,7 @@ class RadiusReanalysisApiTests(unittest.TestCase):
         response = self.client.post("/api/analyze", json={
             "address": "Selected Belgian address",
             "lat": server.DEMO_LAT,
+            "country_code": "be",
             "lon": server.DEMO_LON,
             "radius": radius,
             "topn": 20,
@@ -1264,6 +1570,7 @@ class RealBelgiumParkPreviewApiTests(unittest.TestCase):
                     server._result_cache.clear()
                     response = client.post("/api/analyze", json={
                         "address": name, "lat": lat, "lon": lon,
+                        "country_code": "be",
                         "radius": radius, "topn": 20, "lang": "en",
                     })
                     self.assertEqual(response.status_code, 200)
@@ -2193,7 +2500,8 @@ class BasemapAttributionContentTests(unittest.TestCase):
     def test_geoapify_credit_is_linked_near_the_address_input(self):
         address_input = self.frontend.index('aria-autocomplete="list"')
         credit = self.frontend.index("Powered by Geoapify")
-        radius_controls = self.frontend.index('value="{{ formError }}"', address_input)
+        radius_controls = self.frontend.index('{{ t.radius }}', credit)
+
         self.assertLess(address_input, credit)
         self.assertLess(credit, radius_controls)
         self.assertIn(
