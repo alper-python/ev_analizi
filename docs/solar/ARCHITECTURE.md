@@ -42,3 +42,17 @@ Where possible the engine should retain both:
 - actual solar access with surrounding obstacles
 
 The difference represents local obstruction / shading impact.
+
+## Direct-sun definition
+
+A sampled point is considered directly sunlit only when all three conditions
+are true:
+
+1. the sun is above the local horizon;
+2. the physical surface faces the sun;
+3. the ray from the sample point toward the sun is not blocked by scene
+   geometry.
+
+Therefore unobstructed line-of-sight alone is not sufficient. A north-facing
+facade, for example, must not be marked as directly sunlit when the sun is
+behind the facade to the south.
