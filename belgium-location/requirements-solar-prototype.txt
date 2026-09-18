@@ -1,4 +1,6 @@
 # Solar prototype dependencies.
 # Kept separate from the production DomiFrame runtime until Solar is integrated.
+
 trimesh==5.1.0
 embreex==4.4.0
+pvlib==0.15.2
