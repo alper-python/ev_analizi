@@ -673,6 +673,20 @@ class AccessibilityBaselineContentTests(unittest.TestCase):
             self.assertIn(
                 f'aria-label="{{{{ t.{label_name} }}}}"', input_markup)
 
+    def test_coordinate_search_has_country_selector_and_sends_country_code(self):
+        for source in (
+            '<select ref="{{ coordCountryRef }}" aria-label="{{ t.coordinateCountryLabel }}"',
+            '<option value="be">{{ t.belgium }}</option>',
+            '<option value="nl">{{ t.netherlands }}</option>',
+            "coordinateCountryLabel: 'Country'",
+            "coordinateCountryLabel: 'Ülke'",
+            "coordinateCountryLabel: 'Land'",
+            "coordCountryRef: el => { this.coordCountryEl = el; }",
+            "const countryCode = this.coordCountryEl && this.coordCountryEl.value === 'nl' ? 'nl' : 'be';",
+            "coords: { lat: la, lon: lo, country_code: countryCode }",
+        ):
+            self.assertIn(source, self.frontend)
+
     def test_icon_only_theme_button_has_action_based_accessible_name(self):
         self.assertEqual(
             self.frontend.count('aria-label="{{ themeActionLabel }}"'), 1)

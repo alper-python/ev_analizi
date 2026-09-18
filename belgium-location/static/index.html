@@ -379,6 +379,11 @@
                                        style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
                                 <input ref="{{ lonRef }}" placeholder="{{ t.lonPh }}" aria-label="{{ t.longitudeLabel }}"
                                        style="flex:1 1 140px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:500 13.5px Manrope;min-width:0;min-height:44px;box-sizing:border-box">
+                                <select ref="{{ coordCountryRef }}" aria-label="{{ t.coordinateCountryLabel }}"
+                                        style="flex:0 1 170px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:600 13px Manrope;min-height:44px;box-sizing:border-box">
+                                    <option value="be">{{ t.belgium }}</option>
+                                    <option value="nl">{{ t.netherlands }}</option>
+                                </select>
                                 <button onClick="{{ onCoordSearch }}"
                                         style="padding:11px 18px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 13px Manrope;cursor:pointer"
                                         style-hover="background:var(--chip)">{{ t.searchBtn }}
@@ -1124,7 +1129,7 @@
             brand: 'DomiFrame', h1: 'Yakın Çevre Erişim Skoru',
             sub: 'Yakındaki günlük ihtiyaçlara ve hizmetlere erişim',
             placeholder: 'Örn. Grote Markt 9, 3000 Leuven, Belçika', addressLabel: 'Adres', analyze: 'Analiz et', radius: 'Arama yarıçapı',
-            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.87871)', lonPh: 'Boylam (4.70143)', latitudeLabel: 'Enlem', longitudeLabel: 'Boylam', searchBtn: 'Ara',
+            advanced: 'Gelişmiş: koordinat ile ara', latPh: 'Enlem (50.87871)', lonPh: 'Boylam (4.70143)', latitudeLabel: 'Enlem', longitudeLabel: 'Boylam', coordinateCountryLabel: 'Ülke', belgium: 'Belçika', netherlands: 'Hollanda', searchBtn: 'Ara',
             recent: 'Son aramalar:', vp1t: '6 kategori, tek puan',
             vp1d: 'Okul, market, sağlık, ulaşım, park ve spor ayrı ayrı gösterilir; tek sayı yalnızca ikincil bir özettir.',
             vp2t: 'Tahmini mesafe ve süre', vp2d: 'Tahminler kuş uçuşu mesafeden türetilir; gerçek bir rota planlaması değildir.',
@@ -1263,7 +1268,7 @@
             brand: 'DomiFrame', h1: 'Nearby Access Score',
             sub: 'Access to nearby everyday amenities and services',
             placeholder: 'E.g. Grote Markt 9, 3000 Leuven, Belgium', addressLabel: 'Address', analyze: 'Analyze', radius: 'Search radius',
-            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.87871)', lonPh: 'Longitude (4.70143)', latitudeLabel: 'Latitude', longitudeLabel: 'Longitude', searchBtn: 'Search',
+            advanced: 'Advanced: search by coordinates', latPh: 'Latitude (50.87871)', lonPh: 'Longitude (4.70143)', latitudeLabel: 'Latitude', longitudeLabel: 'Longitude', coordinateCountryLabel: 'Country', belgium: 'Belgium', netherlands: 'Netherlands', searchBtn: 'Search',
             recent: 'Recent searches:', vp1t: '6 categories, one score',
             vp1d: 'Schools, groceries, healthcare, transit, parks and sports are shown separately; the single number is only a secondary summary.',
             vp2t: 'Estimated distance and time', vp2d: 'Estimates are derived from straight-line distance and are not route planning.',
@@ -1402,7 +1407,7 @@
             brand: 'DomiFrame', h1: 'Nabijheids- en voorzieningenscore',
             sub: 'Toegang tot dagelijkse voorzieningen en diensten in de buurt',
             placeholder: 'Bijv. Grote Markt 9, 3000 Leuven, België', addressLabel: 'Adres', analyze: 'Analyseer', radius: 'Zoekstraal',
-            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.87871)', lonPh: 'Lengtegraad (4.70143)', latitudeLabel: 'Breedtegraad', longitudeLabel: 'Lengtegraad', searchBtn: 'Zoek',
+            advanced: 'Geavanceerd: zoeken op coördinaten', latPh: 'Breedtegraad (50.87871)', lonPh: 'Lengtegraad (4.70143)', latitudeLabel: 'Breedtegraad', longitudeLabel: 'Lengtegraad', coordinateCountryLabel: 'Land', belgium: 'België', netherlands: 'Nederland', searchBtn: 'Zoek',
             recent: 'Recente zoekopdrachten:', vp1t: '6 categorieën, één score',
             vp1d: 'Scholen, winkels, zorg, vervoer, parken en sport worden afzonderlijk getoond; het ene getal is alleen een secundaire samenvatting.',
             vp2t: 'Geschatte afstand en reistijd', vp2d: 'De schattingen zijn afgeleid van de hemelsbrede afstand en zijn geen routeplanning.',
@@ -2306,14 +2311,17 @@
           themeLabel: dark ? t.themeLight : t.themeDark,
           themeActionLabel: dark ? t.themeToLight : t.themeToDark,
           toggleTheme: () => { const th = dark ? 'light' : 'dark'; this.savePreference('eca-theme', 'eca-theme-saved-at', th); this.setState({ theme: th }); },
-          addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; },
+          addrRef: el => { this.addrEl = el; }, latRef: el => { this.latEl = el; }, lonRef: el => { this.lonEl = el; }, coordCountryRef: el => { this.coordCountryEl = el; },
           onAddrInput: e => this.handleAddressInput(e),
           onAddrKey: e => this.handleAddressKey(e),
           onSearch: () => this.doSearch(this.addrEl && this.addrEl.value),
           onCoordSearch: () => {
             const la = parseFloat(this.latEl && this.latEl.value), lo = parseFloat(this.lonEl && this.lonEl.value);
             if (isNaN(la) || isNaN(lo)) { this.setState({ formError: t.formErrCoord }); return; }
-            this.doSearch(la.toFixed(5) + ', ' + lo.toFixed(5));
+            const countryCode = this.coordCountryEl && this.coordCountryEl.value === 'nl' ? 'nl' : 'be';
+            this.doSearch(la.toFixed(5) + ', ' + lo.toFixed(5), undefined, {
+              coords: { lat: la, lon: lo, country_code: countryCode }
+            });
           },
           radiusOpts, resultRadiusOpts, recent, hasRecent: recent.length > 0,
           radiusInfoOpen: S.radiusInfoOpen,
