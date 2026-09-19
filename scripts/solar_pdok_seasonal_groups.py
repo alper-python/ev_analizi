@@ -21,6 +21,11 @@ from solar.aggregation.seasonal_exposure import (
 from solar.aggregation.surface_groups import (
     group_surfaces,
 )
+from solar.geometry.facade_exposure import (
+    FacadeExposureClass,
+    measure_facade_exposure,
+    remove_party_walls,
+)
 from solar.geometry.raycast import ShadowEngine
 from solar.geometry.real_surfaces import (
     extract_analyzable_surfaces,
@@ -89,8 +94,38 @@ def main():
         ),
     )
 
+    neighbour_meshes = [
+        mesh
+        for building_id, mesh
+        in scene.meshes.items()
+        if building_id != TARGET_ID
+    ]
+
+    facade_reports = measure_facade_exposure(
+        surfaces,
+        neighbour_meshes=neighbour_meshes,
+    )
+
+    party_walls = [
+        surface
+        for surface in surfaces
+        if (
+            surface.surface_type
+            == "WallSurface"
+            and facade_reports[
+                surface.surface_id
+            ].classification
+            == FacadeExposureClass.PARTY_WALL
+        )
+    ]
+
+    analysis_surfaces = remove_party_walls(
+        surfaces,
+        facade_reports,
+    )
+
     groups = group_surfaces(
-        surfaces
+        analysis_surfaces
     )
 
     samples = sample_group_surfaces(
@@ -102,11 +137,40 @@ def main():
         f"Scene buildings:     {len(scene.meshes)}"
     )
     print(
-        f"Target surfaces:     {len(surfaces)}"
+        f"Raw target surfaces: {len(surfaces)}"
+    )
+    print(
+        f"Party walls removed: {len(party_walls)}"
+    )
+    print(
+        f"Party-wall area:     "
+        f"{sum(item.area_m2 for item in party_walls):.2f} m2"
+    )
+    print(
+        f"Analysis surfaces:   {len(analysis_surfaces)}"
     )
     print(
         f"Direction groups:    {len(groups)}"
     )
+
+    if party_walls:
+        print()
+        print("Excluded party walls:")
+
+        for surface in sorted(
+            party_walls,
+            key=lambda item:
+            -item.area_m2,
+        ):
+            report = facade_reports[
+                surface.surface_id
+            ]
+
+            print(
+                f"  {surface.surface_id} "
+                f"area={surface.area_m2:.2f} m2 "
+                f"near-zero={report.near_zero_pct:.1f}%"
+            )
     print(
         f"Surface samples:     "
         f"{sum(len(item.points) for item in samples.values())}"
