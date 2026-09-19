@@ -28,6 +28,82 @@ def _normalize_surface_normal(surface_normal: np.ndarray) -> np.ndarray:
     return normal / norm
 
 
+RAY_ORIGIN_OFFSET_M = 1e-4
+
+
+def _offset_ray_origins(
+    sample_points: np.ndarray,
+    surface_normal: np.ndarray,
+    *,
+    epsilon_m: float = RAY_ORIGIN_OFFSET_M,
+) -> np.ndarray:
+    """Move ray origins slightly outside the physical surface.
+
+    The offset follows the outward surface normal rather than the solar
+    direction.
+
+    A sun-direction offset becomes ineffective when sunlight approaches a
+    facade at a grazing angle because its normal displacement tends toward
+    zero. That can cause Embree to re-hit the originating triangle and
+    create false self-shadow.
+
+    1e-4 m = 0.1 mm: negligible at building scale but comfortably above
+    the numerical self-intersection range observed in real PDOK LoD2 data.
+    """
+
+    points = np.asarray(
+        sample_points,
+        dtype=float,
+    )
+
+    normal = np.asarray(
+        surface_normal,
+        dtype=float,
+    )
+
+    if (
+        points.ndim != 2
+        or points.shape[1] != 3
+    ):
+        raise ValueError(
+            "sample_points must have shape (n, 3)."
+        )
+
+    if normal.shape != (3,):
+        raise ValueError(
+            "surface_normal must have shape (3,)."
+        )
+
+    length = float(
+        np.linalg.norm(
+            normal
+        )
+    )
+
+    if length <= 1e-12:
+        raise ValueError(
+            "surface_normal cannot have zero length."
+        )
+
+    if epsilon_m <= 0.0:
+        raise ValueError(
+            "epsilon_m must be positive."
+        )
+
+    normal = (
+        normal
+        / length
+    )
+
+    return (
+        points
+        + normal[None, :]
+        * float(
+            epsilon_m
+        )
+    )
+
+
 class ShadowEngine:
     """Determine whether surface samples receive direct sunlight."""
 
@@ -131,7 +207,10 @@ class ShadowEngine:
 
         # Avoid numerical self-intersection when target geometry is later
         # included in the full 3D scene.
-        origins = points + directions * _RAY_ORIGIN_EPSILON_M
+        origins = _offset_ray_origins(
+            points,
+            normal,
+        )
 
         blocked = np.asarray(
             self._intersector.intersects_any(
