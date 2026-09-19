@@ -177,7 +177,8 @@ class BagAddressTests(unittest.TestCase):
                     "properties": {
                         "identificatie": (
                             "0344100000024581"
-                        )
+                        ),
+                        "aantal_verblijfsobjecten": 1,
                     },
                 }
 
@@ -236,6 +237,19 @@ class BagAddressTests(unittest.TestCase):
                 "NL.IMBAG.Pand."
                 "0344100000024581"
             ),
+        )
+
+        self.assertEqual(
+            result.panden[
+                0
+            ].verblijfsobject_count,
+            1,
+        )
+
+        self.assertFalse(
+            result.panden[
+                0
+            ].is_shared_building
         )
 
         self.assertEqual(

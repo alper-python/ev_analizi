@@ -199,6 +199,37 @@ def main():
         f"Pand:            {scene.target_id}"
     )
 
+    target_pand = (
+        scene.address.panden[
+            0
+        ]
+    )
+
+    if (
+        target_pand.verblijfsobject_count
+        is None
+    ):
+        vbo_count_text = "unknown"
+        shared_text = "unknown"
+    else:
+        vbo_count_text = str(
+            target_pand.verblijfsobject_count
+        )
+
+        shared_text = (
+            "YES"
+            if target_pand.is_shared_building
+            else "NO"
+        )
+
+    print(
+        f"Pand VBO count:  {vbo_count_text}"
+    )
+
+    print(
+        f"Shared BAG Pand: {shared_text}"
+    )
+
     print()
     print("DATA PROVENANCE")
     print("-" * 82)
@@ -323,10 +354,24 @@ def main():
     print("RESULT")
     print("-" * 82)
 
-    print(
-        "PASS — exact address resolved and complete "
-        "local Solar geometry was produced."
-    )
+    if target_pand.is_shared_building:
+        print(
+            "LIMITATION — exact address and building geometry "
+            "were resolved, but this BAG Pand contains "
+            f"{target_pand.verblijfsobject_count} VBOs."
+        )
+
+        print(
+            "Solar geometry is building-level only; "
+            "unit-specific roof/facade exposure must not "
+            "be inferred from this scene."
+        )
+
+    else:
+        print(
+            "PASS — exact address resolved and complete "
+            "property-level Solar geometry was produced."
+        )
 
     print(
         f"Runtime:         "

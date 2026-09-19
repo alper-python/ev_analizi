@@ -38,6 +38,19 @@ LOCATION_SEARCH_URL = (
 class BagPand:
     identification: str
     feature_href: str | None = None
+    verblijfsobject_count: int | None = None
+
+    @property
+    def is_shared_building(self) -> bool | None:
+        """Whether BAG reports more than one VBO inside this Pand."""
+
+        if self.verblijfsobject_count is None:
+            return None
+
+        return (
+            self.verblijfsobject_count
+            > 1
+        )
 
     @property
     def cityjson_object_id(self) -> str:
@@ -743,10 +756,29 @@ def resolve_bag_address(
                 "Related BAG pand has no identificatie."
             )
 
+        raw_vbo_count = pand_properties.get(
+            "aantal_verblijfsobjecten"
+        )
+
+        try:
+            vbo_count = (
+                int(
+                    raw_vbo_count
+                )
+                if raw_vbo_count is not None
+                else None
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            vbo_count = None
+
         panden.append(
             BagPand(
                 identification=identification,
                 feature_href=href,
+                verblijfsobject_count=vbo_count,
             )
         )
 
