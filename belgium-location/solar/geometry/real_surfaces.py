@@ -110,7 +110,10 @@ def normal_to_orientation(
         )
     )
 
-    if horizontal <= 1e-8:
+    # A very small roof slope can produce an arbitrary-looking azimuth.
+    # Keep the true normal and tilt for physical calculations, but do not
+    # present an orientation to users for effectively flat surfaces.
+    if tilt < 5.0:
         azimuth = None
     else:
         azimuth = (
